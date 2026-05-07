@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "agro_tycoon" },
+      { name: "description", content: "La Rioja Agro-Tycoon v3 is a farm management simulation game with advanced visual and interactive features." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "agro_tycoon" },
+      { property: "og:description", content: "La Rioja Agro-Tycoon v3 is a farm management simulation game with advanced visual and interactive features." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "agro_tycoon" },
+      { name: "twitter:description", content: "La Rioja Agro-Tycoon v3 is a farm management simulation game with advanced visual and interactive features." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ee5617c1-21ae-47f0-8163-494df1b0aecd/id-preview-e05a138d--16ab1951-11ff-40a2-9324-8677b9e31db7.lovable.app-1778152938416.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ee5617c1-21ae-47f0-8163-494df1b0aecd/id-preview-e05a138d--16ab1951-11ff-40a2-9324-8677b9e31db7.lovable.app-1778152938416.png" },
     ],
     links: [
       {
