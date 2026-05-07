@@ -109,6 +109,7 @@ type Action =
   | { type: "EXPORT"; factoryId: string; amount: number }
   | { type: "PROCESS"; factoryId: string; fincaId: string; amount: number }
   | { type: "BUILD_FACTORY"; factoryType: FactoryType; fincaId: string }
+  | { type: "PLACE_FACTORY"; factoryType: FactoryType; fincaId: string }
   | { type: "HIRE_GOLONDRINA"; count: number }
   | { type: "FIRE_GOLONDRINA" }
   | { type: "SET_SALARIO"; value: number }
