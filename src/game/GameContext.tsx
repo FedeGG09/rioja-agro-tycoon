@@ -341,11 +341,33 @@ function reducer(state: GameState, action: Action): GameState {
       if (totalStock < 5000) return state;
       const fi = state.fincas.find((f) => f.id === action.fincaId);
       if (!fi) return state;
+      if (factoryFor[fi.type] !== action.factoryType) return state;
+      if (state.factories.some((fa) => fa.x === fi.x && fa.y === fi.y)) return state;
       const id = `fa${Date.now()}`;
       return {
         ...state,
         pesos: state.pesos - cost,
         factories: [...state.factories, { id, type: action.factoryType, x: fi.x, y: fi.y, processed: 0 }],
+      };
+    }
+
+    case "PLACE_FACTORY": {
+      // Drag & drop: same cost & rules as BUILD_FACTORY
+      const cost = 1_500_000;
+      if (state.pesos < cost) return state;
+      const fi = state.fincas.find((f) => f.id === action.fincaId);
+      if (!fi) return state;
+      if (factoryFor[fi.type] !== action.factoryType) return state;
+      if (state.factories.some((fa) => fa.x === fi.x && fa.y === fi.y)) return state;
+      const id = `fa${Date.now()}`;
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        factories: [...state.factories, { id, type: action.factoryType, x: fi.x, y: fi.y, processed: 0 }],
+        eventos: [
+          { id: `bld${Date.now()}`, title: "Construcción", description: `Se levantó una ${factoryLabel[action.factoryType]} en ${fi.name}.`, kind: "good" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
       };
     }
 
