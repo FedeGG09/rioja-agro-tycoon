@@ -35,9 +35,10 @@
 
 :root {
   --radius: 0.875rem;
-  /* Dark glassmorphism — slate-950 base */
-  --background: oklch(0.16 0.03 265);
+  /* Dark glassmorphism — slate-950 #020617 base */
+  --background: oklch(0.13 0.035 265);
   --foreground: oklch(0.97 0.01 250);
+  --rot: oklch(0.42 0.16 35);
   --card: oklch(0.27 0.04 260 / 0.5);
   --card-foreground: oklch(0.97 0.01 250);
   --popover: oklch(0.22 0.04 265);
