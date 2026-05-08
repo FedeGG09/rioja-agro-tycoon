@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useGame, type Finca, type FactoryType } from "./GameContext";
+import { ZoomIn, ZoomOut, Maximize2, Move } from "lucide-react";
 import tileVid from "@/assets/tile-vid.png";
 import tileOlivo from "@/assets/tile-olivo.png";
 import tileNogal from "@/assets/tile-nogal.png";
@@ -8,18 +9,20 @@ import tileEmpty from "@/assets/tile-empty.png";
 import buildBodega from "@/assets/build-bodega.png";
 import buildAlmazara from "@/assets/build-almazara.png";
 import buildNuez from "@/assets/build-nuez.png";
+import buildWarehouse from "@/assets/build-warehouse.png";
+import vehTractor from "@/assets/vehicle-tractor.png";
+import vehHilux from "@/assets/vehicle-hilux.png";
+import vehTank from "@/assets/vehicle-tank.png";
 
 const tileImg: Record<string, string> = { vid: tileVid, olivo: tileOlivo, nogal: tileNogal };
 const factoryImg: Record<FactoryType, string> = { bodega: buildBodega, almazara: buildAlmazara, nuez: buildNuez };
 
-// Preload + decode all sprites once at module load
-const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez];
+const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez, buildWarehouse, vehTractor, vehHilux, vehTank];
 if (typeof window !== "undefined") {
   ALL_SPRITES.forEach((src) => {
     const img = new Image();
     img.decoding = "async";
     img.src = src;
-    // best-effort decode
     img.decode?.().catch(() => {});
   });
 }
@@ -29,19 +32,40 @@ function rotPct(stock: number, capacidad: number) {
   return Math.min(1, (stock - capacidad) / Math.max(capacidad, 1));
 }
 
-const TILE_W = 128;
-const TILE_H = 74;
-const GRID = 4;
-const BOARD_W = GRID * TILE_W;
-const BOARD_H = GRID * TILE_H + 160;
+const TILE_W = 168;
+const TILE_H = 96;
+const GRID = 5;
+const BOARD_W = GRID * TILE_W + 200;
+const BOARD_H = GRID * TILE_H + 280;
+const WAREHOUSE_GRID = { x: -1, y: 2 };
 
 function isoPos(x: number, y: number) {
   return {
-    left: (x - y) * (TILE_W / 2) + (GRID * TILE_W) / 2,
-    top: (x + y) * (TILE_H / 2) + 30,
+    left: (x - y) * (TILE_W / 2) + (GRID * TILE_W) / 2 + 100,
+    top: (x + y) * (TILE_H / 2) + 60,
   };
 }
-const WAREHOUSE = isoPos(3.5, -0.6);
+const WAREHOUSE = isoPos(WAREHOUSE_GRID.x, WAREHOUSE_GRID.y);
+
+function buildRoadSet(fincas: Finca[]): Set<string> {
+  const roads = new Set<string>();
+  const wx = WAREHOUSE_GRID.x;
+  const wy = WAREHOUSE_GRID.y;
+  for (const f of fincas) {
+    // horizontal segment along y=wy
+    const [x0, x1] = wx < f.x ? [wx + 1, f.x] : [f.x + 1, wx];
+    for (let x = x0; x <= x1; x++) {
+      if (!(x === f.x && wy === f.y)) roads.add(`${x},${wy}`);
+    }
+    // vertical from wy to f.y at column f.x
+    const [y0, y1] = wy < f.y ? [wy + 1, f.y] : [f.y + 1, wy];
+    for (let y = y0; y <= y1; y++) {
+      if (!(f.x === f.x && y === f.y)) roads.add(`${f.x},${y}`);
+    }
+    roads.delete(`${f.x},${f.y}`);
+  }
+  return roads;
+}
 
 export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) => void; selectedId?: string }) {
   const { state, dispatch, isHarvestMonth, factoryFor, factoryLabel } = useGame();
@@ -49,7 +73,6 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const capacidad = (state.trabajadoresPermanentes + state.trabajadoresGolondrina) * 200;
   const totalWorkers = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
 
-  // Drag state — kept minimal in React; ghost moves via ref/rAF
   const [dragType, setDragType] = useState<FactoryType | null>(null);
   const [hoverTile, setHoverTile] = useState<string | null>(null);
   const [invalidFlash, setInvalidFlash] = useState<string | null>(null);
@@ -60,24 +83,28 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const rafRef = useRef<number | null>(null);
   const hoverRef = useRef<string | null>(null);
 
-  // Responsive scale — fit board within container width
+  // Camera (zoom + pan)
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panDragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [fitScale, setFitScale] = useState(1);
+
   useLayoutEffect(() => {
     if (!wrapRef.current) return;
     const el = wrapRef.current;
     const ro = new ResizeObserver(() => {
-      const w = el.clientWidth - 24; // padding
+      const w = el.clientWidth - 24;
       const h = el.clientHeight - 24;
       const s = Math.min(1, Math.min(w / BOARD_W, h / BOARD_H));
-      setScale(Math.max(0.45, s));
+      setFitScale(Math.max(0.45, s));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Board height adapts to viewport
-  const boardHeight = Math.max(360, Math.min(560, BOARD_H * scale + 80));
+  const totalScale = fitScale * zoom;
+  const boardHeight = Math.max(420, Math.min(680, BOARD_H * fitScale + 80));
 
   const tryPlace = (f: Finca, ftype: FactoryType) => {
     const expected = factoryFor[f.type];
@@ -98,9 +125,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     const flush = () => {
       rafRef.current = null;
       const { x, y } = lastPosRef.current;
-      if (ghostRef.current) {
-        ghostRef.current.style.transform = `translate3d(${x - 32}px, ${y - 32}px, 0)`;
-      }
+      if (ghostRef.current) ghostRef.current.style.transform = `translate3d(${x - 40}px, ${y - 40}px, 0)`;
       const el = document.elementFromPoint(x, y) as HTMLElement | null;
       const tileEl = el?.closest("[data-tile-id]") as HTMLElement | null;
       const tid = tileEl?.dataset.tileId ?? null;
@@ -148,7 +173,29 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     setDragType(t);
   };
 
-  // Memoized tile lookup
+  // Pan handlers (on background only)
+  const onPanStart = (e: React.PointerEvent) => {
+    if (dragType) return;
+    panDragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y, moved: false };
+  };
+  const onPanMove = (e: React.PointerEvent) => {
+    const p = panDragRef.current;
+    if (!p) return;
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) p.moved = true;
+    setPan({ x: p.baseX + dx, y: p.baseY + dy });
+  };
+  const onPanEnd = () => {
+    panDragRef.current = null;
+  };
+
+  // Wheel zoom
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    setZoom((z) => Math.max(0.5, Math.min(2, z - e.deltaY * 0.001)));
+  };
+
   const fincaByXY = useMemo(() => {
     const m = new Map<string, Finca>();
     state.fincas.forEach((f) => m.set(`${f.x},${f.y}`, f));
@@ -159,6 +206,11 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     state.factories.forEach((f) => m.set(`${f.x},${f.y}`, f));
     return m;
   }, [state.factories]);
+
+  const roads = useMemo(() => buildRoadSet(state.fincas), [state.fincas]);
+
+  // Vehículos: tractores (1 por finca activa, 2 si mecanización)
+  const tractorsPerFinca = state.tech.mecanizacion ? 2 : 1;
 
   return (
     <div className="space-y-3">
@@ -194,32 +246,46 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
         ref={wrapRef}
         className="glass relative w-full overflow-hidden rounded-2xl"
         style={{ height: boardHeight, touchAction: "none" }}
+        onWheel={onWheel}
+        onPointerDown={onPanStart}
+        onPointerMove={onPanMove}
+        onPointerUp={onPanEnd}
+        onPointerCancel={onPanEnd}
       >
-        {/* Background */}
+        {/* Background — atardecer riojano */}
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse at 30% 0%, oklch(0.55 0.14 230 / 0.35), transparent 60%), radial-gradient(ellipse at 70% 100%, oklch(0.45 0.18 35 / 0.25), transparent 65%)",
+              "radial-gradient(ellipse at 25% 0%, oklch(0.55 0.16 240 / 0.4), transparent 60%), radial-gradient(ellipse at 70% 100%, oklch(0.55 0.18 35 / 0.35), transparent 65%), linear-gradient(180deg, oklch(0.18 0.04 260) 0%, oklch(0.14 0.05 30) 100%)",
           }}
         />
+        {/* Sol */}
         <motion.div
-          animate={{ scale: [1, 1.05, 1], opacity: [0.45, 0.7, 0.45] }}
+          animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.75, 0.5] }}
           transition={{ duration: 6, repeat: Infinity }}
-          className="pointer-events-none absolute right-8 top-6 h-24 w-24 rounded-full bg-[var(--gold)] blur-3xl"
+          className="pointer-events-none absolute right-12 top-8 h-32 w-32 rounded-full bg-[var(--gold)] blur-3xl"
         />
 
-        {/* Scaled iso board */}
+        {/* Camera transform */}
         <div
           className="absolute left-1/2 top-1/2"
           style={{
             width: BOARD_W,
             height: BOARD_H,
-            transform: `translate(-50%, -50%) scale(${scale})`,
+            transform: `translate(-50%, -50%) translate3d(${pan.x}px, ${pan.y}px, 0) scale(${totalScale})`,
             transformOrigin: "center",
             willChange: "transform",
           }}
         >
+          {/* Roads layer (debajo de tiles) */}
+          {Array.from(roads).map((key) => {
+            const [x, y] = key.split(",").map(Number);
+            const pos = isoPos(x, y);
+            return <Road key={`r-${key}`} pos={pos} />;
+          })}
+
+          {/* Tiles */}
           {Array.from({ length: GRID * GRID }).map((_, i) => {
             const x = i % GRID;
             const y = Math.floor(i / GRID);
@@ -231,7 +297,8 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             const isHover = !!(f && hoverTile === f.id);
             const rot = f ? rotPct(f.stock, capacidad) : 0;
             const pos = isoPos(x, y);
-            const z = x + y;
+            const z = (x + y) * 10;
+            const showWaterDrip = !!(f && state.tech.riego && (f.type === "vid" || f.type === "olivo"));
 
             return (
               <Tile
@@ -246,20 +313,52 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
                 incompatible={incompatible}
                 isHover={isHover}
                 shake={invalidFlash === f?.id}
+                showWaterDrip={showWaterDrip}
+                hasTank={!!(f && state.tech.riego)}
+                tractorCount={f && harvest ? tractorsPerFinca : 0}
+                hasDrones={!!(f && state.tech.drones)}
                 onSelect={onSelect}
               />
             );
           })}
 
-          {/* Warehouse marker */}
+          {/* Warehouse */}
           <div
             className="pointer-events-none absolute"
-            style={{ left: WAREHOUSE.left - 24, top: WAREHOUSE.top - 24, zIndex: 100 }}
+            style={{
+              left: WAREHOUSE.left - TILE_W * 0.5,
+              top: WAREHOUSE.top - TILE_W * 0.45,
+              width: TILE_W,
+              height: TILE_W,
+              zIndex: 500,
+            }}
           >
-            <div className="glass rounded-lg px-2 py-1 text-[10px] font-bold">🏚️ Almacén</div>
+            <img
+              src={buildWarehouse}
+              alt="Almacén central"
+              width={TILE_W}
+              height={TILE_W}
+              decoding="async"
+              draggable={false}
+              className="h-full w-full select-none object-contain"
+              style={{ filter: "drop-shadow(0 12px 14px rgba(0,0,0,0.65))" }}
+            />
+            <img
+              src={vehHilux}
+              alt=""
+              width={56}
+              height={56}
+              decoding="async"
+              draggable={false}
+              className="absolute h-14 w-14 select-none object-contain"
+              style={{ left: TILE_W * 0.55, top: TILE_W * 0.62, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.5))" }}
+            />
+            <div className="glass absolute -top-2 left-1/2 -translate-x-1/2 rounded-md px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap">
+              🏚️ Almacén
+            </div>
           </div>
 
-          {/* Workers walking */}
+          {/* Trabajadores caminando (golondrina) */}
           <AnimatePresence>
             {harvest && totalWorkers > 0 &&
               state.fincas.map((f, i) => {
@@ -268,15 +367,15 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
                 return Array.from({ length: n }).map((_, k) => (
                   <motion.div
                     key={`w-${f.id}-${k}-${state.mes}`}
-                    initial={{ opacity: 0, x: from.left + 40, y: from.top + 10 }}
+                    initial={{ opacity: 0, x: from.left, y: from.top }}
                     animate={{
                       opacity: [0, 1, 1, 1, 0],
-                      x: [from.left + 40, from.left + 40, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
-                      y: [from.top + 10, from.top + 10, WAREHOUSE.top + 10, WAREHOUSE.top + 10, WAREHOUSE.top - 10],
+                      x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
+                      y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
                     }}
-                    transition={{ duration: 5, delay: i * 0.4 + k * 0.25, repeat: Infinity, ease: "easeInOut" }}
-                    className="pointer-events-none absolute left-0 top-0 text-lg drop-shadow-lg"
-                    style={{ zIndex: 200, willChange: "transform" }}
+                    transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
+                    className="pointer-events-none absolute left-0 top-0 text-xl drop-shadow-lg"
+                    style={{ zIndex: 600, willChange: "transform" }}
                   >
                     👷
                   </motion.div>
@@ -285,28 +384,57 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
           </AnimatePresence>
         </div>
 
-        <div className="glass absolute bottom-2 left-2 rounded-lg px-2 py-1 text-[10px] font-semibold sm:bottom-3 sm:left-3 sm:px-3 sm:py-1.5 sm:text-xs">
+        {/* HUD interno */}
+        <div className="glass absolute bottom-2 left-2 rounded-lg px-2 py-1 text-[10px] font-semibold sm:bottom-3 sm:left-3 sm:px-3 sm:py-1.5 sm:text-xs z-[800]">
           {harvest ? "🌞 Cosecha" : "🍂 Fuera"}
         </div>
-        <div className="glass absolute bottom-2 right-2 rounded-lg px-2 py-1 text-[10px] sm:bottom-3 sm:right-3 sm:px-3 sm:py-1.5 sm:text-xs">
+        <div className="glass absolute bottom-2 right-2 rounded-lg px-2 py-1 text-[10px] sm:bottom-3 sm:right-3 sm:px-3 sm:py-1.5 sm:text-xs z-[800]">
           Cap: <b>{capacidad}</b> · Trab: <b>{totalWorkers}</b>
+        </div>
+
+        {/* Camera controls */}
+        <div className="glass absolute right-2 top-2 flex flex-col gap-1 rounded-xl p-1 z-[800]">
+          <button
+            onClick={() => setZoom((z) => Math.min(2, z + 0.15))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10"
+            title="Zoom +"
+          >
+            <ZoomIn size={14} />
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10"
+            title="Zoom -"
+          >
+            <ZoomOut size={14} />
+          </button>
+          <button
+            onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10"
+            title="Reset"
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
+        <div className="glass absolute left-2 top-2 flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground z-[800]">
+          <Move size={11} /> Arrastrá para mover · rueda para zoom
         </div>
       </div>
 
-      {/* Floating drag ghost — moved via direct DOM (no re-render per pointer event) */}
+      {/* Drag ghost */}
       {dragType && (
         <div
           ref={ghostRef}
           className="pointer-events-none fixed left-0 top-0 z-[9999]"
-          style={{ willChange: "transform", transform: `translate3d(${lastPosRef.current.x - 32}px, ${lastPosRef.current.y - 32}px, 0)` }}
+          style={{ willChange: "transform", transform: `translate3d(${lastPosRef.current.x - 40}px, ${lastPosRef.current.y - 40}px, 0)` }}
         >
           <img
             src={factoryImg[dragType]}
             alt=""
-            width={64}
-            height={64}
+            width={80}
+            height={80}
             decoding="async"
-            className="h-16 w-16 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]"
+            className="h-20 w-20 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.6)]"
           />
         </div>
       )}
@@ -314,8 +442,34 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   );
 }
 
-// ─── Tile (memoized) ──────────────────────────────────────────────────────────
+// ─── Road tile ──────────────────────────────────────────────────────────
+const Road = memo(function Road({ pos }: { pos: { left: number; top: number } }) {
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{
+        left: pos.left - TILE_W / 2,
+        top: pos.top + TILE_H * 0.25,
+        width: TILE_W,
+        height: TILE_H,
+        zIndex: 1,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "20% 10%",
+          background: "linear-gradient(135deg, oklch(0.42 0.06 50), oklch(0.36 0.05 45))",
+          transform: "rotateX(60deg) rotateZ(45deg)",
+          borderRadius: 2,
+          boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.05), 0 2px 6px rgba(0,0,0,0.4)",
+        }}
+      />
+    </div>
+  );
+});
 
+// ─── Tile ──────────────────────────────────────────────────────────
 interface TileProps {
   pos: { left: number; top: number };
   z: number;
@@ -327,52 +481,121 @@ interface TileProps {
   incompatible: boolean;
   isHover: boolean;
   shake: boolean;
+  showWaterDrip: boolean;
+  hasTank: boolean;
+  tractorCount: number;
+  hasDrones: boolean;
   onSelect: (f: Finca) => void;
 }
 
 const Tile = memo(function Tile({
-  pos, z, finca: f, factory: fa, rot, isSelected, compatible, incompatible, isHover, shake, onSelect,
+  pos, z, finca: f, factory: fa, rot, isSelected, compatible, incompatible, isHover, shake,
+  showWaterDrip, hasTank, tractorCount, hasDrones, onSelect,
 }: TileProps) {
-  const ringColor = incompatible && isHover
-    ? "oklch(0.62 0.24 25)"
-    : compatible && isHover
-    ? "var(--vine-green)"
-    : "var(--amber)";
+  const ringColor = incompatible && isHover ? "oklch(0.62 0.24 25)" : compatible && isHover ? "var(--vine-green)" : "var(--amber)";
   const showRing = isSelected || (compatible && isHover) || (incompatible && isHover);
 
   return (
     <motion.div
       data-tile-id={f?.id}
-      onClick={() => f && onSelect(f)}
+      onClick={(e) => { e.stopPropagation(); if (f) onSelect(f); }}
       animate={shake ? { x: [0, -4, 4, -4, 4, 0] } : { x: 0 }}
       className="absolute cursor-pointer"
-      style={{ left: pos.left, top: pos.top, width: TILE_W, height: TILE_H * 2, zIndex: z }}
+      style={{ left: pos.left - TILE_W / 2, top: pos.top, width: TILE_W, height: TILE_H * 2.5, zIndex: z }}
     >
       <img
         src={f ? tileImg[f.type] : tileEmpty}
         alt=""
-        width={TILE_W + 6}
-        height={TILE_W + 6}
+        width={TILE_W + 8}
+        height={TILE_W + 8}
         decoding="async"
         draggable={false}
-        className="pointer-events-none absolute -top-6 left-0 select-none"
+        className="pointer-events-none absolute -top-8 left-0 select-none"
         style={{
-          width: TILE_W + 6,
-          height: TILE_W + 6,
+          width: TILE_W + 8,
+          height: TILE_W + 8,
           filter:
             rot > 0
               ? `hue-rotate(-30deg) saturate(${1 - rot * 0.6}) brightness(${1 - rot * 0.3}) sepia(${rot * 0.6})`
               : isSelected
               ? "drop-shadow(0 0 12px var(--amber))"
-              : "drop-shadow(0 6px 8px rgba(0,0,0,0.45))",
+              : "drop-shadow(0 8px 10px rgba(0,0,0,0.5))",
         }}
       />
+
+      {/* Riego: overlay azul */}
+      {showWaterDrip && (
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: TILE_W * 0.1,
+            top: TILE_H * 0.45,
+            width: TILE_W * 0.8,
+            height: TILE_H * 0.5,
+            background: "repeating-linear-gradient(45deg, oklch(0.7 0.15 230 / 0.4) 0 2px, transparent 2px 14px)",
+            transform: "rotateX(60deg) rotateZ(45deg)",
+            borderRadius: 4,
+            mixBlendMode: "screen",
+          }}
+        />
+      )}
+
+      {/* Tanque australiano */}
+      {hasTank && (
+        <img
+          src={vehTank}
+          alt=""
+          width={48}
+          height={48}
+          decoding="async"
+          draggable={false}
+          className="pointer-events-none absolute select-none"
+          style={{ left: TILE_W * 0.05, top: TILE_H * 0.1, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}
+        />
+      )}
+
+      {/* Tractores recorriendo surcos */}
+      {Array.from({ length: tractorCount }).map((_, i) => (
+        <motion.img
+          key={`tr-${i}`}
+          src={vehTractor}
+          alt=""
+          width={56}
+          height={56}
+          decoding="async"
+          draggable={false}
+          className="pointer-events-none absolute select-none"
+          initial={{ x: 0, y: 0 }}
+          animate={{
+            x: [TILE_W * 0.15, TILE_W * 0.55, TILE_W * 0.55, TILE_W * 0.15, TILE_W * 0.15],
+            y: [TILE_H * 0.55, TILE_H * 0.55, TILE_H * 1.0, TILE_H * 1.0, TILE_H * 0.55],
+          }}
+          transition={{ duration: 8, repeat: Infinity, ease: "linear", delay: i * 2 }}
+          style={{ width: 56, height: 56, filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}
+        />
+      ))}
+
+      {/* Drones */}
+      {hasDrones && (
+        <motion.div
+          className="pointer-events-none absolute text-xl"
+          animate={{
+            x: [TILE_W * 0.2, TILE_W * 0.6, TILE_W * 0.4, TILE_W * 0.2],
+            y: [TILE_H * 0.2, TILE_H * 0.4, TILE_H * 0.6, TILE_H * 0.2],
+          }}
+          transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+          style={{ filter: "drop-shadow(0 3px 4px rgba(0,0,0,0.5))" }}
+        >
+          🛸
+        </motion.div>
+      )}
+
       {showRing && (
         <div
           className="pointer-events-none absolute"
           style={{
             left: 0,
-            top: TILE_H / 2,
+            top: TILE_H * 0.5,
             width: TILE_W,
             height: TILE_H,
             transform: "rotateX(60deg) rotateZ(45deg)",
@@ -382,19 +605,21 @@ const Tile = memo(function Tile({
           }}
         />
       )}
+
       {f && (
-        <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2">
+        <div className="pointer-events-none absolute left-1/2 -top-2 -translate-x-1/2 z-10">
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold backdrop-blur ${
-              rot > 0 ? "bg-destructive/80 text-white" : "bg-black/55 text-white"
+              rot > 0 ? "bg-destructive/80 text-white" : "bg-black/60 text-white"
             }`}
           >
             {rot > 0.4 ? "🥀 " : ""}
-            {f.stock}
+            {f.name} · {f.stock}
             {rot > 0 ? " 💀" : ""}
           </span>
         </div>
       )}
+
       <AnimatePresence>
         {fa && (
           <motion.img
@@ -408,11 +633,11 @@ const Tile = memo(function Tile({
             decoding="async"
             className="pointer-events-none absolute select-none"
             style={{
-              left: TILE_W * 0.18,
-              top: -TILE_H * 0.6,
-              width: TILE_W * 0.78,
-              height: TILE_W * 0.78,
-              filter: "drop-shadow(0 8px 10px rgba(0,0,0,0.55))",
+              left: TILE_W * 0.15,
+              top: -TILE_H * 0.7,
+              width: TILE_W * 0.85,
+              height: TILE_W * 0.85,
+              filter: "drop-shadow(0 10px 12px rgba(0,0,0,0.6))",
               willChange: "transform",
             }}
           />
