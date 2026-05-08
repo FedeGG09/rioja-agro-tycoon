@@ -46,6 +46,20 @@ export function HUD() {
         </div>
       )}
 
+      {state.deuda > 0 && (
+        <div className="mt-3 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          🏛️ Deuda acumulada: <b>{fmtPesos(state.deuda)}</b>
+          {state.deuda >= 14_000_000 && !state.moratoria.activa && (
+            <button
+              onClick={() => dispatch({ type: "TAKE_MORATORIA" })}
+              className="ml-2 rounded-md bg-destructive/30 px-2 py-0.5 text-[10px] font-bold hover:bg-destructive/50"
+            >
+              Tomar Moratoria Riojana
+            </button>
+          )}
+        </div>
+      )}
+
       {state.huelga && (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-destructive/20 border border-destructive/40 px-3 py-2 text-sm font-bold text-destructive">
           <AlertTriangle size={16} /> HUELGA TOTAL — la moral colapsó. Aumentá salarios ya.

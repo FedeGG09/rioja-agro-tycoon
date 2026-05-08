@@ -5,13 +5,14 @@ import { IsometricGrid } from "@/game/IsometricGrid";
 import { HUD } from "@/game/HUD";
 import { SidePanel } from "@/game/SidePanel";
 import { EventsLog, Dashboard } from "@/game/EventsAndChart";
+import { AmbientOverlay } from "@/game/AmbientOverlay";
 
 export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
       { title: "La Rioja Agro-Tycoon — Simulador económico riojano" },
-      { name: "description", content: "Simulación económica argentina: vid, olivo y nogal en La Rioja. Gestioná inflación, dólar, retenciones y cosecha golondrina." },
+      { name: "description", content: "Simulación económica argentina: vid, olivo y nogal en La Rioja. Gestioná inflación, dólar, retenciones, RRHH, I+D y exportaciones." },
     ],
   }),
 });
@@ -22,9 +23,10 @@ function GameUI() {
   const selected = state.fincas.find((f) => f.id === selectedId);
   return (
     <div className="min-h-screen p-4">
-      <div className="mx-auto max-w-7xl space-y-4">
+      <AmbientOverlay />
+      <div className="mx-auto max-w-7xl space-y-4 relative z-[50]">
         <HUD />
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
             <IsometricGrid onSelect={(f: Finca) => setSelectedId(f.id)} selectedId={selectedId} />
             <Dashboard />
