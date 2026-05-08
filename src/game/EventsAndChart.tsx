@@ -2,30 +2,47 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, Area, AreaChart } from "recharts";
 import { useGame } from "./GameContext";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Newspaper, AlertTriangle, CheckCircle2, Info } from "lucide-react";
 
 export function EventsLog() {
   const { state } = useGame();
   return (
     <div className="glass rounded-2xl p-3">
-      <div className="mb-2 text-[11px] font-black uppercase tracking-wider text-[var(--amber)]">📰 Diario Riojano</div>
-      <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
-        <AnimatePresence>
-          {state.eventos.map((e) => (
-            <motion.div
-              key={e.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              className={`rounded-lg border px-2 py-1.5 text-xs ${
-                e.kind === "bad" ? "border-destructive/30 bg-destructive/10 text-destructive" :
-                e.kind === "good" ? "border-[var(--vine-green)]/30 bg-[var(--vine-green)]/10 text-[var(--vine-green)]" :
-                "border-white/10 bg-white/5 text-foreground"
-              }`}
-            >
-              <b>M{e.month} · {e.title}</b> — <span className="opacity-80">{e.description}</span>
-            </motion.div>
-          ))}
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[var(--amber)]">
+        <Newspaper size={13} /> Diario Riojano
+      </div>
+      <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+        <AnimatePresence initial={false}>
+          {state.eventos.map((e) => {
+            const Icon = e.kind === "bad" ? AlertTriangle : e.kind === "good" ? CheckCircle2 : Info;
+            const tone =
+              e.kind === "bad" ? "text-destructive bg-destructive/10 border-destructive/30" :
+              e.kind === "good" ? "text-[var(--vine-green)] bg-[var(--vine-green)]/10 border-[var(--vine-green)]/30" :
+              "text-foreground bg-white/5 border-white/10";
+            const initialLetter = e.title[0]?.toUpperCase() ?? "·";
+            return (
+              <motion.div
+                key={e.id}
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 20 }}
+                className={`flex gap-2 rounded-2xl border px-3 py-2 ${tone}`}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/40 text-sm font-black ring-1 ring-white/10">
+                  {initialLetter}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1 font-bold">
+                      <Icon size={11} /> {e.title}
+                    </div>
+                    <span className="text-[9px] opacity-60">M{e.month}</span>
+                  </div>
+                  <div className="text-[11px] opacity-90 leading-snug">{e.description}</div>
+                </div>
+              </motion.div>
+            );
+          })}
         </AnimatePresence>
       </div>
     </div>

@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
+import { generatePool, generateWorker, type Worker } from "./workers";
 
 export type CropType = "vid" | "olivo" | "nogal";
 export type FactoryType = "bodega" | "almazara" | "nuez";
+export type TechId = "riego" | "mecanizacion" | "drones";
 
 export interface Finca {
   id: string;
@@ -9,8 +11,8 @@ export interface Finca {
   y: number;
   type: CropType;
   name: string;
-  stock: number; // raw materia prima
-  growth: number; // 0-100
+  stock: number;
+  growth: number;
 }
 
 export interface Factory {
@@ -18,14 +20,14 @@ export interface Factory {
   type: FactoryType;
   x: number;
   y: number;
-  processed: number; // productos elaborados
+  processed: number;
 }
 
 export interface PendingExport {
   id: string;
   factoryType: FactoryType;
   usd: number;
-  monthDue: number; // mes en que se cobra
+  monthDue: number;
 }
 
 export interface GameEvent {
@@ -42,21 +44,37 @@ export interface HistoryPoint {
   patrimonio: number;
 }
 
+export interface Tech {
+  riego: boolean;       // +20% rendimiento vid/olivo
+  mecanizacion: boolean; // -30% costo proceso
+  drones: boolean;       // +15% precio export
+}
+
+export interface Moratoria {
+  activa: boolean;
+  cuotasRestantes: number;     // de 12
+  cuotaMensual: number;
+  objetivoUSD: number;
+  exportadoUSD: number;
+  cumplida: boolean;
+}
+
 export interface GameState {
   pesos: number;
   dolares: number;
-  inflacionMensual: number; // %
-  inflacionAcumulada: number; // %
-  tipoDeCambio: number; // ARS per USD
-  brecha: number; // % blue gap
-  dolarBlue: number; // ARS per USD blue (oficial * (1 + brecha/100))
-  retenciones: number; // %
-  moralTrabajadores: number; // 0-100
+  deuda: number;
+  inflacionMensual: number;
+  inflacionAcumulada: number;
+  tipoDeCambio: number;
+  brecha: number;
+  dolarBlue: number;
+  retenciones: number;
+  moralTrabajadores: number;
   trabajadoresPermanentes: number;
   trabajadoresGolondrina: number;
-  salarioMensual: number; // pesos
-  ultimoAumento: number; // % aplicado este mes
-  mes: number; // 1..
+  salarioMensual: number;
+  ultimoAumento: number;
+  mes: number;
   fincas: Finca[];
   factories: Factory[];
   eventos: GameEvent[];
@@ -64,14 +82,33 @@ export interface GameState {
   paused: boolean;
   huelga: boolean;
   pendingExports: PendingExport[];
-  costoInsumosMensual: number; // pesos, deducido cada mes (escala con dólar blue)
+  costoInsumosMensual: number;
+  // RRHH detallado
+  personalDisponible: Worker[];
+  personalContratado: Worker[];
+  // I+D
+  tech: Tech;
+  // Moratoria
+  moratoria: Moratoria;
 }
 
-const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán"];
+const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán", "Sañogasta", "Malligasta"];
+
+const initialPermanentes: Worker[] = [
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+  generateWorker("permanente", 350_000),
+];
 
 const initial: GameState = {
   pesos: 2_500_000,
   dolares: 0,
+  deuda: 0,
   inflacionMensual: 6,
   inflacionAcumulada: 0,
   tipoDeCambio: 1000,
@@ -86,9 +123,9 @@ const initial: GameState = {
   mes: 1,
   fincas: [
     { id: "f1", x: 0, y: 0, type: "vid", name: "Famatina", stock: 0, growth: 30 },
-    { id: "f2", x: 1, y: 0, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
-    { id: "f3", x: 0, y: 1, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
-    { id: "f4", x: 1, y: 1, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
+    { id: "f2", x: 2, y: 0, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
+    { id: "f3", x: 0, y: 2, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
+    { id: "f4", x: 2, y: 2, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
   ],
   factories: [],
   eventos: [
@@ -99,6 +136,10 @@ const initial: GameState = {
   huelga: false,
   pendingExports: [],
   costoInsumosMensual: 120_000,
+  personalDisponible: generatePool(6, 350_000),
+  personalContratado: initialPermanentes,
+  tech: { riego: false, mecanizacion: false, drones: false },
+  moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
 };
 
 type Action =
@@ -112,10 +153,15 @@ type Action =
   | { type: "PLACE_FACTORY"; factoryType: FactoryType; fincaId: string }
   | { type: "HIRE_GOLONDRINA"; count: number }
   | { type: "FIRE_GOLONDRINA" }
+  | { type: "HIRE_WORKER"; workerId: string }
+  | { type: "FIRE_WORKER"; workerId: string }
+  | { type: "REFRESH_POOL" }
   | { type: "SET_SALARIO"; value: number }
   | { type: "PAY_RAISE"; pct: number }
   | { type: "LIQUIDAR"; usd: number }
-  | { type: "BUY_FINCA"; cropType: CropType };
+  | { type: "BUY_FINCA"; cropType: CropType }
+  | { type: "RESEARCH"; tech: TechId }
+  | { type: "TAKE_MORATORIA" };
 
 const factoryFor: Record<CropType, FactoryType> = {
   vid: "bodega",
@@ -135,9 +181,15 @@ const factoryLabel: Record<FactoryType, string> = {
   nuez: "Planta de Nuez",
 };
 
+export const TECH_INFO: Record<TechId, { name: string; cost: number; desc: string; icon: string }> = {
+  riego: { name: "Riego por Goteo", cost: 5_000_000, desc: "+20% rendimiento en cosecha de vid y olivo.", icon: "💧" },
+  mecanizacion: { name: "Mecanización Pesada", cost: 12_000_000, desc: "-30% costo de procesamiento. Más tractores en cancha.", icon: "🚜" },
+  drones: { name: "Drones de Monitoreo", cost: 8_000_000, desc: "+15% precio FOB en exportaciones.", icon: "🛸" },
+};
+
 function isHarvestMonth(mes: number) {
   const m = ((mes - 1) % 12) + 1;
-  return m >= 1 && m <= 3; // verano (sur)
+  return m >= 1 && m <= 3;
 }
 
 function rand(min: number, max: number) {
@@ -153,14 +205,15 @@ function reducer(state: GameState, action: Action): GameState {
       if (state.paused) return state;
       const mes = state.mes + 1;
       const harvest = isHarvestMonth(mes);
-      // crecimiento o cosecha automática parcial
+      const yieldMult = state.tech.riego ? 1.2 : 1;
       const capacidad = (state.trabajadoresPermanentes + state.trabajadoresGolondrina) * 200;
       let usadoCap = 0;
       const fincas = state.fincas.map((f) => {
         let growth = Math.min(100, f.growth + (harvest ? 8 : 4));
         let stock = f.stock;
         if (harvest && growth >= 80) {
-          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100));
+          const baseRend = (f.type === "vid" || f.type === "olivo") ? yieldMult : 1;
+          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend);
           const restante = Math.max(0, capacidad - usadoCap);
           const cosechado = Math.min(potencial, restante);
           const perdido = potencial - cosechado;
@@ -168,7 +221,6 @@ function reducer(state: GameState, action: Action): GameState {
           stock += cosechado;
           growth = perdido > 0 ? 50 : 30;
         }
-        // Pudrición: si stock excede capacidad mensual de los trabajadores, pierde 20%
         if (stock > capacidad && capacidad >= 0) {
           const exceso = stock - capacidad;
           stock = capacidad + Math.floor(exceso * 0.8);
@@ -176,28 +228,23 @@ function reducer(state: GameState, action: Action): GameState {
         return { ...f, growth, stock };
       });
 
-      // costos: salarios + insumos importados (escalan con dólar blue / oficial)
       const totalTrab = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
       const costoSalarios = totalTrab * state.salarioMensual;
       const ratioBlue = state.dolarBlue / state.tipoDeCambio;
-      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * state.factories.length || state.costoInsumosMensual);
+      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * (state.factories.length || 1));
       let pesos = state.pesos - costoSalarios - costoInsumos;
 
-      // inflación
       const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8));
       const inflacionAcumulada = state.inflacionAcumulada + state.inflacionMensual;
 
-      // tipo de cambio sube con inflación
       const tipoDeCambio = Math.round(state.tipoDeCambio * (1 + state.inflacionMensual / 100 - 0.005));
       const brecha = Math.max(10, Math.min(120, state.brecha + rand(-3, 3)));
       const dolarBlue = Math.round(tipoDeCambio * (1 + brecha / 100));
 
-      // moral: comparar último aumento vs inflación mensual
       const moralDelta = (state.ultimoAumento - state.inflacionMensual) * 0.8;
       const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1));
       const huelga = moralTrabajadores <= 0;
 
-      // eventos aleatorios
       const eventos = [...state.eventos];
       if (Math.random() < 0.18) {
         const roll = Math.random();
@@ -219,13 +266,10 @@ function reducer(state: GameState, action: Action): GameState {
         if (last.title === "Devaluación") tc2 = Math.round(tc2 * 1.15);
       }
 
-      // Cobros diferidos: liquidar exportaciones que vencen este mes (auto al oficial)
       const due = state.pendingExports.filter((p) => p.monthDue <= mes);
       const pendingExports = state.pendingExports.filter((p) => p.monthDue > mes);
       let pesosCobrados = 0;
-      for (const d of due) {
-        pesosCobrados += d.usd * tc2;
-      }
+      for (const d of due) pesosCobrados += d.usd * tc2;
       pesos += pesosCobrados;
       if (due.length > 0) {
         eventos.unshift({
@@ -237,7 +281,43 @@ function reducer(state: GameState, action: Action): GameState {
         });
       }
 
-      const patrimonio = pesos + state.dolares * tc2 +
+      // Moratoria: cobrar cuota mensual y verificar objetivo
+      let moratoria = state.moratoria;
+      if (moratoria.activa) {
+        pesos -= moratoria.cuotaMensual;
+        const cuotasRestantes = moratoria.cuotasRestantes - 1;
+        if (cuotasRestantes <= 0) {
+          if (moratoria.exportadoUSD >= moratoria.objetivoUSD) {
+            // Cumple → bonificación 20% del total refinanciado
+            const bonus = moratoria.cuotaMensual * 12 * 0.2;
+            pesos += bonus;
+            eventos.unshift({ id: `mor${mes}`, title: "Moratoria CUMPLIDA", description: `Cumpliste el objetivo de exportación. Bonificación de ${Math.round(bonus).toLocaleString("es-AR")} pesos.`, kind: "good", month: mes });
+            moratoria = { ...moratoria, activa: false, cuotasRestantes: 0, cumplida: true };
+          } else {
+            // Falla → penalidad 30%
+            const multa = moratoria.cuotaMensual * 12 * 0.3;
+            pesos -= multa;
+            eventos.unshift({ id: `mor${mes}`, title: "Moratoria INCUMPLIDA", description: `No alcanzaste el objetivo. Multa de ${Math.round(multa).toLocaleString("es-AR")} pesos.`, kind: "bad", month: mes });
+            moratoria = { ...moratoria, activa: false, cuotasRestantes: 0 };
+          }
+        } else {
+          moratoria = { ...moratoria, cuotasRestantes };
+        }
+      }
+
+      // Deuda: si pesos < 0, acumula con interés mensual del 8%
+      let deuda = state.deuda;
+      if (pesos < 0) {
+        deuda += Math.abs(pesos);
+        pesos = 0;
+      }
+      deuda = Math.round(deuda * 1.08);
+
+      // Refresh pool de RRHH cada 3 meses
+      let personalDisponible = state.personalDisponible;
+      if (mes % 3 === 0) personalDisponible = generatePool(6, state.salarioMensual);
+
+      const patrimonio = pesos + state.dolares * tc2 - deuda +
         fincas2.reduce((s, f) => s + f.stock * 50, 0) +
         state.factories.reduce((s, fa) => s + fa.processed * 200, 0) +
         pendingExports.reduce((s, p) => s + p.usd * tc2, 0);
@@ -249,6 +329,7 @@ function reducer(state: GameState, action: Action): GameState {
         mes,
         fincas: fincas2,
         pesos,
+        deuda,
         inflacionMensual: Number(inflacionMensual.toFixed(2)),
         inflacionAcumulada: Number(inflacionAcumulada.toFixed(2)),
         tipoDeCambio: tc2,
@@ -260,13 +341,16 @@ function reducer(state: GameState, action: Action): GameState {
         history,
         huelga,
         pendingExports,
+        personalDisponible,
+        moratoria,
       };
     }
 
     case "HARVEST": {
       const f = state.fincas.find((x) => x.id === action.fincaId);
       if (!f || f.growth < 50) return state;
-      const cosechado = Math.floor(f.growth * 12 * (state.moralTrabajadores / 100));
+      const mult = state.tech.riego && (f.type === "vid" || f.type === "olivo") ? 1.2 : 1;
+      const cosechado = Math.floor(f.growth * 12 * (state.moralTrabajadores / 100) * mult);
       return {
         ...state,
         fincas: state.fincas.map((x) => x.id === f.id ? { ...x, stock: x.stock + cosechado, growth: 20 } : x),
@@ -292,7 +376,8 @@ function reducer(state: GameState, action: Action): GameState {
       if (!fa || !fi) return state;
       if (factoryFor[fi.type] !== fa.type) return state;
       const amt = Math.min(action.amount, fi.stock);
-      const cost = amt * 100; // pesos
+      const baseCost = state.tech.mecanizacion ? 70 : 100;
+      const cost = amt * baseCost;
       if (state.pesos < cost) return state;
       return {
         ...state,
@@ -307,18 +392,22 @@ function reducer(state: GameState, action: Action): GameState {
       if (!fa) return state;
       const amt = Math.min(action.amount, fa.processed);
       if (amt <= 0) return state;
-      const precioFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 12; // USD/u
+      const baseFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 12;
+      const precioFOB = state.tech.drones ? baseFOB * 1.15 : baseFOB;
       const bruto = amt * precioFOB;
       const neto = bruto * (1 - state.retenciones / 100);
-      // Cobro diferido a 2 meses
       const pending: PendingExport = {
         id: `pe${Date.now()}`,
         factoryType: fa.type,
         usd: neto,
         monthDue: state.mes + 2,
       };
+      const moratoria = state.moratoria.activa
+        ? { ...state.moratoria, exportadoUSD: state.moratoria.exportadoUSD + neto }
+        : state.moratoria;
       return {
         ...state,
+        moratoria,
         factories: state.factories.map((x) => x.id === fa.id ? { ...x, processed: x.processed - amt } : x),
         pendingExports: [...state.pendingExports, pending],
         eventos: [
@@ -334,25 +423,8 @@ function reducer(state: GameState, action: Action): GameState {
       return { ...state, dolares: state.dolares - usd, pesos };
     }
 
-    case "BUILD_FACTORY": {
-      const cost = 1_500_000;
-      if (state.pesos < cost) return state;
-      const totalStock = state.fincas.reduce((s, f) => s + f.stock, 0);
-      if (totalStock < 5000) return state;
-      const fi = state.fincas.find((f) => f.id === action.fincaId);
-      if (!fi) return state;
-      if (factoryFor[fi.type] !== action.factoryType) return state;
-      if (state.factories.some((fa) => fa.x === fi.x && fa.y === fi.y)) return state;
-      const id = `fa${Date.now()}`;
-      return {
-        ...state,
-        pesos: state.pesos - cost,
-        factories: [...state.factories, { id, type: action.factoryType, x: fi.x, y: fi.y, processed: 0 }],
-      };
-    }
-
+    case "BUILD_FACTORY":
     case "PLACE_FACTORY": {
-      // Drag & drop: same cost & rules as BUILD_FACTORY
       const cost = 1_500_000;
       if (state.pesos < cost) return state;
       const fi = state.fincas.find((f) => f.id === action.fincaId);
@@ -374,11 +446,52 @@ function reducer(state: GameState, action: Action): GameState {
     case "HIRE_GOLONDRINA": {
       const cost = action.count * 80_000;
       if (state.pesos < cost) return state;
-      return { ...state, pesos: state.pesos - cost, trabajadoresGolondrina: state.trabajadoresGolondrina + action.count };
+      const nuevos = generatePool(action.count, state.salarioMensual).map((w) => ({ ...w, tipo: "golondrina" as const }));
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        trabajadoresGolondrina: state.trabajadoresGolondrina + action.count,
+        personalContratado: [...state.personalContratado, ...nuevos],
+      };
     }
 
     case "FIRE_GOLONDRINA":
-      return { ...state, trabajadoresGolondrina: 0 };
+      return {
+        ...state,
+        trabajadoresGolondrina: 0,
+        personalContratado: state.personalContratado.filter((w) => w.tipo !== "golondrina"),
+      };
+
+    case "HIRE_WORKER": {
+      const w = state.personalDisponible.find((x) => x.id === action.workerId);
+      if (!w) return state;
+      const cost = w.salario * 0.5;
+      if (state.pesos < cost) return state;
+      const isHarvest = isHarvestMonth(state.mes);
+      const tipo: Worker["tipo"] = isHarvest ? "golondrina" : "permanente";
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        personalDisponible: state.personalDisponible.filter((x) => x.id !== w.id),
+        personalContratado: [...state.personalContratado, { ...w, tipo }],
+        trabajadoresPermanentes: tipo === "permanente" ? state.trabajadoresPermanentes + 1 : state.trabajadoresPermanentes,
+        trabajadoresGolondrina: tipo === "golondrina" ? state.trabajadoresGolondrina + 1 : state.trabajadoresGolondrina,
+      };
+    }
+
+    case "FIRE_WORKER": {
+      const w = state.personalContratado.find((x) => x.id === action.workerId);
+      if (!w) return state;
+      return {
+        ...state,
+        personalContratado: state.personalContratado.filter((x) => x.id !== w.id),
+        trabajadoresPermanentes: w.tipo === "permanente" ? Math.max(0, state.trabajadoresPermanentes - 1) : state.trabajadoresPermanentes,
+        trabajadoresGolondrina: w.tipo === "golondrina" ? Math.max(0, state.trabajadoresGolondrina - 1) : state.trabajadoresGolondrina,
+      };
+    }
+
+    case "REFRESH_POOL":
+      return { ...state, personalDisponible: generatePool(6, state.salarioMensual) };
 
     case "SET_SALARIO":
       return { ...state, salarioMensual: action.value };
@@ -393,8 +506,8 @@ function reducer(state: GameState, action: Action): GameState {
       if (state.pesos < cost) return state;
       const used = new Set(state.fincas.map((f) => `${f.x},${f.y}`));
       let pos: { x: number; y: number } | null = null;
-      for (let y = 0; y < 4 && !pos; y++) {
-        for (let x = 0; x < 4 && !pos; x++) {
+      for (let y = 0; y < 5 && !pos; y++) {
+        for (let x = 0; x < 5 && !pos; x++) {
           if (!used.has(`${x},${y}`)) pos = { x, y };
         }
       }
@@ -404,6 +517,45 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         pesos: state.pesos - cost,
         fincas: [...state.fincas, { id: `f${Date.now()}`, x: pos.x, y: pos.y, type: action.cropType, name, stock: 0, growth: 10 }],
+      };
+    }
+
+    case "RESEARCH": {
+      const info = TECH_INFO[action.tech];
+      if (state.tech[action.tech]) return state;
+      if (state.pesos < info.cost) return state;
+      return {
+        ...state,
+        pesos: state.pesos - info.cost,
+        tech: { ...state.tech, [action.tech]: true },
+        eventos: [
+          { id: `tech${Date.now()}`, title: `I+D: ${info.name}`, description: info.desc, kind: "good" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
+      };
+    }
+
+    case "TAKE_MORATORIA": {
+      if (state.moratoria.activa || state.deuda < 14_000_000) return state;
+      const refinanciado = state.deuda;
+      const cuotaMensual = Math.round(refinanciado / 12);
+      // objetivo: equivalente USD oficial al 50% del refinanciado
+      const objetivoUSD = Math.round((refinanciado * 0.5) / state.tipoDeCambio);
+      return {
+        ...state,
+        deuda: 0,
+        moratoria: {
+          activa: true,
+          cuotasRestantes: 12,
+          cuotaMensual,
+          objetivoUSD,
+          exportadoUSD: 0,
+          cumplida: false,
+        },
+        eventos: [
+          { id: `mortake${Date.now()}`, title: "Crédito de Fomento Riojano", description: `Refinanciado ${(refinanciado / 1_000_000).toFixed(1)}M en 12 cuotas. Objetivo: exportar US$${objetivoUSD.toLocaleString("es-AR")} en 12 meses.`, kind: "info" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
       };
     }
   }
