@@ -1,12 +1,38 @@
 import { motion } from "framer-motion";
 import { useGame, fmtPesos } from "./GameContext";
-import { Users, UserPlus, UserMinus, RefreshCw, Star } from "lucide-react";
+import { Users, UserPlus, UserMinus, RefreshCw, Star, AlertTriangle } from "lucide-react";
 
 export function RRHHPanel() {
   const { state, dispatch } = useGame();
+  const permanentes = state.personalContratado.filter((w) => w.tipo === "permanente");
+  const golondrinas = state.personalContratado.filter((w) => w.tipo === "golondrina");
+  const costoMensual = state.personalContratado.reduce((s, w) => s + w.salario, 0);
+  const insuficiente = costoMensual > state.pesos;
 
   return (
     <div className="space-y-3">
+      <div className={`glass rounded-xl p-3 ${insuficiente ? "ring-1 ring-destructive/60" : ""}`}>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Costo operativo proyectado</div>
+        <div className={`text-lg font-black tabular-nums ${insuficiente ? "text-destructive" : "text-[var(--amber)]"}`}>
+          {fmtPesos(costoMensual)} <span className="text-[10px] font-normal text-muted-foreground">/ mes</span>
+        </div>
+        <div className="mt-1 grid grid-cols-2 gap-2 text-[10px]">
+          <div className="rounded-md bg-white/5 px-2 py-1">
+            <div className="text-muted-foreground">Permanentes</div>
+            <div className="font-bold text-[var(--vine-green)]">{permanentes.length}</div>
+          </div>
+          <div className="rounded-md bg-white/5 px-2 py-1">
+            <div className="text-muted-foreground">Golondrinas</div>
+            <div className="font-bold text-[var(--amber)]">{golondrinas.length}</div>
+          </div>
+        </div>
+        {insuficiente && (
+          <div className="mt-2 flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-1 text-[10px] font-bold text-destructive">
+            <AlertTriangle size={11} /> Pesos insuficientes para pagar planilla — moral colapsará el próximo mes.
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-black uppercase tracking-wider text-[var(--amber)] flex items-center gap-1.5">
           <Users size={13} /> Personal Disponible

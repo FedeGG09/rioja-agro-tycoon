@@ -27,6 +27,9 @@ if (typeof window !== "undefined") {
   });
 }
 
+// Vegetación decorativa del Valle riojano (jarilla, algarrobo, piedras)
+const DECOR = ["🌵", "🪨", "🌿", "🌾", "🪵", "🌳"] as const;
+
 function rotPct(stock: number, capacidad: number) {
   if (capacidad <= 0 || stock <= capacidad) return 0;
   return Math.min(1, (stock - capacidad) / Math.max(capacidad, 1));
@@ -358,29 +361,69 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             </div>
           </div>
 
-          {/* Trabajadores caminando (golondrina) */}
+          {/* Trabajadores: en huelga estáticos con warning, sino caminando hacia almacén */}
           <AnimatePresence>
-            {harvest && totalWorkers > 0 &&
-              state.fincas.map((f, i) => {
-                const n = Math.max(1, Math.min(4, Math.round(totalWorkers / 6)));
-                const from = isoPos(f.x, f.y);
-                return Array.from({ length: n }).map((_, k) => (
+            {totalWorkers > 0 && state.fincas.map((f, i) => {
+              const n = Math.max(1, Math.min(4, Math.round(totalWorkers / 6)));
+              const from = isoPos(f.x, f.y);
+              if (state.huelga) {
+                return (
                   <motion.div
-                    key={`w-${f.id}-${k}-${state.mes}`}
-                    initial={{ opacity: 0, x: from.left, y: from.top }}
-                    animate={{
-                      opacity: [0, 1, 1, 1, 0],
-                      x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
-                      y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
-                    }}
-                    transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
-                    className="pointer-events-none absolute left-0 top-0 text-xl drop-shadow-lg"
-                    style={{ zIndex: 600, willChange: "transform" }}
+                    key={`huelga-${f.id}`}
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1, y: [0, -3, 0] }}
+                    transition={{ y: { duration: 1.4, repeat: Infinity }, opacity: { duration: 0.4 } }}
+                    className="pointer-events-none absolute text-2xl drop-shadow-lg"
+                    style={{ left: from.left - 12, top: from.top + 8, zIndex: 600 }}
                   >
-                    👷
+                    <span className="relative">
+                      👷
+                      <span className="absolute -right-3 -top-2 rounded-full bg-destructive px-1 text-[10px] font-black text-white">⚠</span>
+                    </span>
                   </motion.div>
-                ));
-              })}
+                );
+              }
+              if (!harvest) return null;
+              return Array.from({ length: n }).map((_, k) => (
+                <motion.div
+                  key={`w-${f.id}-${k}-${state.mes}`}
+                  initial={{ opacity: 0, x: from.left, y: from.top }}
+                  animate={{
+                    opacity: [0, 1, 1, 1, 0],
+                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
+                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
+                  }}
+                  transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
+                  className="pointer-events-none absolute left-0 top-0 text-xl drop-shadow-lg"
+                  style={{ zIndex: 600, willChange: "transform" }}
+                >
+                  👷
+                </motion.div>
+              ));
+            })}
+          </AnimatePresence>
+
+          {/* Cajones de procesado: almacén → fábrica continuo */}
+          <AnimatePresence>
+            {!state.huelga && state.factories.map((fa, i) => {
+              const to = isoPos(fa.x, fa.y);
+              return (
+                <motion.div
+                  key={`cargo-${fa.id}`}
+                  initial={{ opacity: 0 }}
+                  animate={{
+                    opacity: [0, 1, 1, 0],
+                    x: [WAREHOUSE.left, WAREHOUSE.left, to.left, to.left],
+                    y: [WAREHOUSE.top, WAREHOUSE.top, to.top, to.top],
+                  }}
+                  transition={{ duration: 5, delay: i * 0.7, repeat: Infinity, ease: "linear" }}
+                  className="pointer-events-none absolute left-0 top-0 text-base drop-shadow-lg"
+                  style={{ zIndex: 605, willChange: "transform" }}
+                >
+                  📦
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
 
@@ -495,11 +538,13 @@ const Tile = memo(function Tile({
   const ringColor = incompatible && isHover ? "oklch(0.62 0.24 25)" : compatible && isHover ? "var(--vine-green)" : "var(--amber)";
   const showRing = isSelected || (compatible && isHover) || (incompatible && isHover);
 
+  const decoration = !f ? DECOR[((pos.left * 7 + pos.top * 13) | 0) % DECOR.length] : null;
   return (
     <motion.div
       data-tile-id={f?.id}
       onClick={(e) => { e.stopPropagation(); if (f) onSelect(f); }}
       animate={shake ? { x: [0, -4, 4, -4, 4, 0] } : { x: 0 }}
+      whileHover={f ? { y: -6, transition: { type: "spring", stiffness: 280, damping: 18 } } : undefined}
       className="absolute cursor-pointer"
       style={{ left: pos.left - TILE_W / 2, top: pos.top, width: TILE_W, height: TILE_H * 2.5, zIndex: z }}
     >
@@ -523,6 +568,15 @@ const Tile = memo(function Tile({
         }}
       />
 
+      {/* Vegetación decorativa en celdas vacías (jarilla, algarrobo, piedra) */}
+      {decoration && (
+        <div
+          className="pointer-events-none absolute select-none text-2xl"
+          style={{ left: TILE_W * 0.32, top: TILE_H * 0.55, opacity: 0.85, filter: "drop-shadow(0 4px 4px rgba(0,0,0,0.5))" }}
+        >
+          {decoration}
+        </div>
+      )}
       {/* Riego: overlay azul */}
       {showWaterDrip && (
         <div

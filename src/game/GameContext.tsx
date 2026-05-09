@@ -42,6 +42,7 @@ export interface HistoryPoint {
   month: number;
   inflacion: number;
   patrimonio: number;
+  deuda?: number;
 }
 
 export interface Tech {
@@ -57,6 +58,11 @@ export interface Moratoria {
   objetivoUSD: number;
   exportadoUSD: number;
   cumplida: boolean;
+}
+
+export interface Researching {
+  tech: TechId;
+  mesesRestantes: number;
 }
 
 export interface GameState {
@@ -88,6 +94,7 @@ export interface GameState {
   personalContratado: Worker[];
   // I+D
   tech: Tech;
+  researching: Researching | null;
   // Moratoria
   moratoria: Moratoria;
 }
@@ -139,6 +146,7 @@ const initial: GameState = {
   personalDisponible: generatePool(6, 350_000),
   personalContratado: initialPermanentes,
   tech: { riego: false, mecanizacion: false, drones: false },
+  researching: null,
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
 };
 
@@ -161,7 +169,9 @@ type Action =
   | { type: "LIQUIDAR"; usd: number }
   | { type: "BUY_FINCA"; cropType: CropType }
   | { type: "RESEARCH"; tech: TechId }
-  | { type: "TAKE_MORATORIA" };
+  | { type: "TAKE_MORATORIA" }
+  | { type: "RESET_GAME" }
+  | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
   vid: "bodega",
@@ -181,10 +191,10 @@ const factoryLabel: Record<FactoryType, string> = {
   nuez: "Planta de Nuez",
 };
 
-export const TECH_INFO: Record<TechId, { name: string; cost: number; desc: string; icon: string }> = {
-  riego: { name: "Riego por Goteo", cost: 5_000_000, desc: "+20% rendimiento en cosecha de vid y olivo.", icon: "💧" },
-  mecanizacion: { name: "Mecanización Pesada", cost: 12_000_000, desc: "-30% costo de procesamiento. Más tractores en cancha.", icon: "🚜" },
-  drones: { name: "Drones de Monitoreo", cost: 8_000_000, desc: "+15% precio FOB en exportaciones.", icon: "🛸" },
+export const TECH_INFO: Record<TechId, { name: string; cost: number; meses: number; desc: string; icon: string }> = {
+  riego: { name: "Riego por Goteo", cost: 5_000_000, meses: 2, desc: "+20% rendimiento en vid/olivo. Reduce costo operativo.", icon: "💧" },
+  mecanizacion: { name: "Mecanización Pesada", cost: 12_000_000, meses: 3, desc: "-30% costo de procesamiento. Tractores duplicados, menos golondrinas.", icon: "🚜" },
+  drones: { name: "Drones de Monitoreo", cost: 8_000_000, meses: 2, desc: "+15% precio FOB. Mitiga impacto de inflación y clima.", icon: "🛸" },
 };
 
 function isHarvestMonth(mes: number) {
@@ -231,10 +241,13 @@ function reducer(state: GameState, action: Action): GameState {
       const totalTrab = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
       const costoSalarios = totalTrab * state.salarioMensual;
       const ratioBlue = state.dolarBlue / state.tipoDeCambio;
-      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * (state.factories.length || 1));
+      const insumosMult = state.tech.riego ? 0.85 : 1;
+      const inflacionMitigada = state.tech.drones ? 0.7 : 1;
+      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * insumosMult * (state.factories.length || 1));
+      const salariosImpagos = costoSalarios > state.pesos;
       let pesos = state.pesos - costoSalarios - costoInsumos;
 
-      const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8));
+      const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8) * inflacionMitigada);
       const inflacionAcumulada = state.inflacionAcumulada + state.inflacionMensual;
 
       const tipoDeCambio = Math.round(state.tipoDeCambio * (1 + state.inflacionMensual / 100 - 0.005));
@@ -242,8 +255,9 @@ function reducer(state: GameState, action: Action): GameState {
       const dolarBlue = Math.round(tipoDeCambio * (1 + brecha / 100));
 
       const moralDelta = (state.ultimoAumento - state.inflacionMensual) * 0.8;
-      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1));
-      const huelga = moralTrabajadores <= 0;
+      const moralPenalSalarios = salariosImpagos ? 25 : 0;
+      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios));
+      const huelga = moralTrabajadores <= 20;
 
       const eventos = [...state.eventos];
       if (Math.random() < 0.18) {
@@ -317,12 +331,30 @@ function reducer(state: GameState, action: Action): GameState {
       let personalDisponible = state.personalDisponible;
       if (mes % 3 === 0) personalDisponible = generatePool(6, state.salarioMensual);
 
+      // I+D en progreso
+      let researching = state.researching;
+      let tech = state.tech;
+      if (researching) {
+        const r = researching.mesesRestantes - 1;
+        if (r <= 0) {
+          tech = { ...tech, [researching.tech]: true };
+          eventos.unshift({ id: `tdone${mes}`, title: `I+D Completada: ${TECH_INFO[researching.tech].name}`, description: TECH_INFO[researching.tech].desc, kind: "good", month: mes });
+          researching = null;
+        } else {
+          researching = { ...researching, mesesRestantes: r };
+        }
+      }
+
+      if (salariosImpagos) {
+        eventos.unshift({ id: `imp${mes}`, title: "Sueldos impagos", description: "No alcanzaron los pesos para pagar la planilla. La moral se desplomó.", kind: "bad", month: mes });
+      }
+
       const patrimonio = pesos + state.dolares * tc2 - deuda +
         fincas2.reduce((s, f) => s + f.stock * 50, 0) +
         state.factories.reduce((s, fa) => s + fa.processed * 200, 0) +
         pendingExports.reduce((s, p) => s + p.usd * tc2, 0);
 
-      const history = [...state.history, { month: mes, inflacion: Math.round(inflacionAcumulada), patrimonio: Math.round(patrimonio) }].slice(-36);
+      const history = [...state.history, { month: mes, inflacion: Math.round(inflacionAcumulada), patrimonio: Math.round(patrimonio), deuda: Math.round(deuda) }].slice(-36);
 
       return {
         ...state,
@@ -343,6 +375,8 @@ function reducer(state: GameState, action: Action): GameState {
         pendingExports,
         personalDisponible,
         moratoria,
+        researching,
+        tech,
       };
     }
 
@@ -361,7 +395,7 @@ function reducer(state: GameState, action: Action): GameState {
       const f = state.fincas.find((x) => x.id === action.fincaId);
       if (!f) return state;
       const amt = Math.min(action.amount, f.stock);
-      const precio = f.type === "vid" ? 1200 : f.type === "olivo" ? 900 : 1500;
+      const precio = f.type === "vid" ? 1200 : f.type === "olivo" ? 900 : 2400;
       const ingreso = amt * precio;
       return {
         ...state,
@@ -392,7 +426,7 @@ function reducer(state: GameState, action: Action): GameState {
       if (!fa) return state;
       const amt = Math.min(action.amount, fa.processed);
       if (amt <= 0) return state;
-      const baseFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 12;
+      const baseFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 22;
       const precioFOB = state.tech.drones ? baseFOB * 1.15 : baseFOB;
       const bruto = amt * precioFOB;
       const neto = bruto * (1 - state.retenciones / 100);
@@ -523,13 +557,14 @@ function reducer(state: GameState, action: Action): GameState {
     case "RESEARCH": {
       const info = TECH_INFO[action.tech];
       if (state.tech[action.tech]) return state;
+      if (state.researching) return state;
       if (state.pesos < info.cost) return state;
       return {
         ...state,
         pesos: state.pesos - info.cost,
-        tech: { ...state.tech, [action.tech]: true },
+        researching: { tech: action.tech, mesesRestantes: info.meses },
         eventos: [
-          { id: `tech${Date.now()}`, title: `I+D: ${info.name}`, description: info.desc, kind: "good" as const, month: state.mes },
+          { id: `tech${Date.now()}`, title: `I+D iniciada: ${info.name}`, description: `Inversión de ${(info.cost / 1_000_000).toFixed(1)}M. Lista en ${info.meses} mes(es).`, kind: "info" as const, month: state.mes },
           ...state.eventos,
         ].slice(0, 20),
       };
@@ -558,6 +593,12 @@ function reducer(state: GameState, action: Action): GameState {
         ].slice(0, 20),
       };
     }
+
+    case "RESET_GAME":
+      return initial;
+
+    case "LOAD_STATE":
+      return action.state;
   }
 }
 
@@ -568,14 +609,55 @@ interface Ctx {
   factoryLabel: typeof factoryLabel;
   factoryFor: typeof factoryFor;
   isHarvestMonth: typeof isHarvestMonth;
+  resetGame: () => void;
 }
 
 const GameCtx = createContext<Ctx | null>(null);
+
+const SAVE_KEY = "lra_tycoon_v4_save";
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const lastSavedMes = useRef(state.mes);
+  const loadedRef = useRef(false);
+
+  // Cargar al iniciar
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SAVE_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as GameState;
+        if (parsed && typeof parsed.mes === "number") {
+          // Defaults para campos nuevos por compatibilidad
+          if (!parsed.researching) parsed.researching = null;
+          if (!parsed.tech) parsed.tech = { riego: false, mecanizacion: false, drones: false };
+          if (!parsed.moratoria) parsed.moratoria = initial.moratoria;
+          if (!parsed.personalDisponible) parsed.personalDisponible = generatePool(6, parsed.salarioMensual ?? 350_000);
+          if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
+          dispatch({ type: "LOAD_STATE", state: parsed });
+          lastSavedMes.current = parsed.mes;
+        }
+      }
+    } catch (err) {
+      console.warn("[save] no pude restaurar partida", err);
+    }
+  }, []);
+
+  // Auto-save al cambiar de mes
+  useEffect(() => {
+    if (state.mes !== lastSavedMes.current) {
+      lastSavedMes.current = state.mes;
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.warn("[save] localStorage lleno", err);
+      }
+    }
+  }, [state]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -584,8 +666,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
+  const resetGame = () => {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { void e; }
+    dispatch({ type: "RESET_GAME" });
+  };
+
   return (
-    <GameCtx.Provider value={{ state, dispatch, cropLabel, factoryLabel, factoryFor, isHarvestMonth }}>
+    <GameCtx.Provider value={{ state, dispatch, cropLabel, factoryLabel, factoryFor, isHarvestMonth, resetGame }}>
       {children}
     </GameCtx.Provider>
   );
