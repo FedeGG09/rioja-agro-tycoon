@@ -358,29 +358,69 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             </div>
           </div>
 
-          {/* Trabajadores caminando (golondrina) */}
+          {/* Trabajadores: en huelga estáticos con warning, sino caminando hacia almacén */}
           <AnimatePresence>
-            {harvest && totalWorkers > 0 &&
-              state.fincas.map((f, i) => {
-                const n = Math.max(1, Math.min(4, Math.round(totalWorkers / 6)));
-                const from = isoPos(f.x, f.y);
-                return Array.from({ length: n }).map((_, k) => (
+            {totalWorkers > 0 && state.fincas.map((f, i) => {
+              const n = Math.max(1, Math.min(4, Math.round(totalWorkers / 6)));
+              const from = isoPos(f.x, f.y);
+              if (state.huelga) {
+                return (
                   <motion.div
-                    key={`w-${f.id}-${k}-${state.mes}`}
-                    initial={{ opacity: 0, x: from.left, y: from.top }}
-                    animate={{
-                      opacity: [0, 1, 1, 1, 0],
-                      x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
-                      y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
-                    }}
-                    transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
-                    className="pointer-events-none absolute left-0 top-0 text-xl drop-shadow-lg"
-                    style={{ zIndex: 600, willChange: "transform" }}
+                    key={`huelga-${f.id}`}
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1, y: [0, -3, 0] }}
+                    transition={{ y: { duration: 1.4, repeat: Infinity }, opacity: { duration: 0.4 } }}
+                    className="pointer-events-none absolute text-2xl drop-shadow-lg"
+                    style={{ left: from.left - 12, top: from.top + 8, zIndex: 600 }}
                   >
-                    👷
+                    <span className="relative">
+                      👷
+                      <span className="absolute -right-3 -top-2 rounded-full bg-destructive px-1 text-[10px] font-black text-white">⚠</span>
+                    </span>
                   </motion.div>
-                ));
-              })}
+                );
+              }
+              if (!harvest) return null;
+              return Array.from({ length: n }).map((_, k) => (
+                <motion.div
+                  key={`w-${f.id}-${k}-${state.mes}`}
+                  initial={{ opacity: 0, x: from.left, y: from.top }}
+                  animate={{
+                    opacity: [0, 1, 1, 1, 0],
+                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
+                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
+                  }}
+                  transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
+                  className="pointer-events-none absolute left-0 top-0 text-xl drop-shadow-lg"
+                  style={{ zIndex: 600, willChange: "transform" }}
+                >
+                  👷
+                </motion.div>
+              ));
+            })}
+          </AnimatePresence>
+
+          {/* Cajones de procesado: almacén → fábrica continuo */}
+          <AnimatePresence>
+            {!state.huelga && state.factories.map((fa, i) => {
+              const to = isoPos(fa.x, fa.y);
+              return (
+                <motion.div
+                  key={`cargo-${fa.id}`}
+                  initial={{ opacity: 0 }}
+                  animate={{
+                    opacity: [0, 1, 1, 0],
+                    x: [WAREHOUSE.left, WAREHOUSE.left, to.left, to.left],
+                    y: [WAREHOUSE.top, WAREHOUSE.top, to.top, to.top],
+                  }}
+                  transition={{ duration: 5, delay: i * 0.7, repeat: Infinity, ease: "linear" }}
+                  className="pointer-events-none absolute left-0 top-0 text-base drop-shadow-lg"
+                  style={{ zIndex: 605, willChange: "transform" }}
+                >
+                  📦
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </div>
 
