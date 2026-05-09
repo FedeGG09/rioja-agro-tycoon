@@ -42,6 +42,7 @@ export interface HistoryPoint {
   month: number;
   inflacion: number;
   patrimonio: number;
+  deuda?: number;
 }
 
 export interface Tech {
