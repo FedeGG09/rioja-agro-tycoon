@@ -116,6 +116,38 @@ export function SidePanel({ selected }: { selected?: Finca }) {
         </TabsContent>
 
         <TabsContent value="fin" className="mt-3 space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+          <Card title="📒 Libro de Exportaciones Pendientes">
+            {state.pendingExports.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground">Sin envíos en curso. Procesá stock y exportá desde una fábrica.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {state.pendingExports.map((p) => {
+                  const meses = p.monthDue - state.mes;
+                  const bruto = p.usd / (1 - state.retenciones / 100);
+                  const ret = bruto - p.usd;
+                  return (
+                    <div key={p.id} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="font-bold capitalize">{p.factoryType}</span>
+                        <span className="tabular-nums text-[var(--vine-green)]">{fmtUSD(p.usd)}</span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span>FOB bruto US${bruto.toFixed(0)} · retención {state.retenciones}% (US${ret.toFixed(0)})</span>
+                      </div>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-muted-foreground">Liquida en M{p.monthDue} ({meses}m)</span>
+                        <span className="text-[var(--amber)]">≈ {fmtPesos(p.usd * state.tipoDeCambio)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  Total a cobrar: <b className="text-[var(--vine-green)]">{fmtUSD(state.pendingExports.reduce((s, p) => s + p.usd, 0))}</b> · liquidación automática al oficial.
+                </div>
+              </div>
+            )}
+          </Card>
+
           <Card title="💵 Aduana / Liquidación voluntaria">
             <div className="text-xs text-muted-foreground">USD disponibles: <b className="text-[var(--vine-green)]">{fmtUSD(state.dolares)}</b></div>
             <div className="text-xs">Oficial ${state.tipoDeCambio} · Blue ${state.dolarBlue}</div>
