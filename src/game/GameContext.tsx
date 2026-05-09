@@ -93,6 +93,7 @@ export interface GameState {
   personalContratado: Worker[];
   // I+D
   tech: Tech;
+  researching: Researching | null;
   // Moratoria
   moratoria: Moratoria;
 }
