@@ -188,10 +188,10 @@ const factoryLabel: Record<FactoryType, string> = {
   nuez: "Planta de Nuez",
 };
 
-export const TECH_INFO: Record<TechId, { name: string; cost: number; desc: string; icon: string }> = {
-  riego: { name: "Riego por Goteo", cost: 5_000_000, desc: "+20% rendimiento en cosecha de vid y olivo.", icon: "💧" },
-  mecanizacion: { name: "Mecanización Pesada", cost: 12_000_000, desc: "-30% costo de procesamiento. Más tractores en cancha.", icon: "🚜" },
-  drones: { name: "Drones de Monitoreo", cost: 8_000_000, desc: "+15% precio FOB en exportaciones.", icon: "🛸" },
+export const TECH_INFO: Record<TechId, { name: string; cost: number; meses: number; desc: string; icon: string }> = {
+  riego: { name: "Riego por Goteo", cost: 5_000_000, meses: 2, desc: "+20% rendimiento en vid/olivo. Reduce costo operativo.", icon: "💧" },
+  mecanizacion: { name: "Mecanización Pesada", cost: 12_000_000, meses: 3, desc: "-30% costo de procesamiento. Tractores duplicados, menos golondrinas.", icon: "🚜" },
+  drones: { name: "Drones de Monitoreo", cost: 8_000_000, meses: 2, desc: "+15% precio FOB. Mitiga impacto de inflación y clima.", icon: "🛸" },
 };
 
 function isHarvestMonth(mes: number) {
