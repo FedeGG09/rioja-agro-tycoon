@@ -59,6 +59,11 @@ export interface Moratoria {
   cumplida: boolean;
 }
 
+export interface Researching {
+  tech: TechId;
+  mesesRestantes: number;
+}
+
 export interface GameState {
   pesos: number;
   dolares: number;
