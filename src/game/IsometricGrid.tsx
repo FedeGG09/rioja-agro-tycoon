@@ -535,11 +535,13 @@ const Tile = memo(function Tile({
   const ringColor = incompatible && isHover ? "oklch(0.62 0.24 25)" : compatible && isHover ? "var(--vine-green)" : "var(--amber)";
   const showRing = isSelected || (compatible && isHover) || (incompatible && isHover);
 
+  const decoration = !f ? DECOR[((pos.left * 7 + pos.top * 13) | 0) % DECOR.length] : null;
   return (
     <motion.div
       data-tile-id={f?.id}
       onClick={(e) => { e.stopPropagation(); if (f) onSelect(f); }}
       animate={shake ? { x: [0, -4, 4, -4, 4, 0] } : { x: 0 }}
+      whileHover={f ? { y: -6, transition: { type: "spring", stiffness: 280, damping: 18 } } : undefined}
       className="absolute cursor-pointer"
       style={{ left: pos.left - TILE_W / 2, top: pos.top, width: TILE_W, height: TILE_H * 2.5, zIndex: z }}
     >
@@ -563,6 +565,15 @@ const Tile = memo(function Tile({
         }}
       />
 
+      {/* Vegetación decorativa en celdas vacías (jarilla, algarrobo, piedra) */}
+      {decoration && (
+        <div
+          className="pointer-events-none absolute select-none text-2xl"
+          style={{ left: TILE_W * 0.32, top: TILE_H * 0.55, opacity: 0.85, filter: "drop-shadow(0 4px 4px rgba(0,0,0,0.5))" }}
+        >
+          {decoration}
+        </div>
+      )}
       {/* Riego: overlay azul */}
       {showWaterDrip && (
         <div
