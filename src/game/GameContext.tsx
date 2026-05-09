@@ -145,6 +145,7 @@ const initial: GameState = {
   personalDisponible: generatePool(6, 350_000),
   personalContratado: initialPermanentes,
   tech: { riego: false, mecanizacion: false, drones: false },
+  researching: null,
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
 };
 
