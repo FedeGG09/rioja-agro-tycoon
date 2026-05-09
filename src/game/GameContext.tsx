@@ -328,12 +328,30 @@ function reducer(state: GameState, action: Action): GameState {
       let personalDisponible = state.personalDisponible;
       if (mes % 3 === 0) personalDisponible = generatePool(6, state.salarioMensual);
 
+      // I+D en progreso
+      let researching = state.researching;
+      let tech = state.tech;
+      if (researching) {
+        const r = researching.mesesRestantes - 1;
+        if (r <= 0) {
+          tech = { ...tech, [researching.tech]: true };
+          eventos.unshift({ id: `tdone${mes}`, title: `I+D Completada: ${TECH_INFO[researching.tech].name}`, description: TECH_INFO[researching.tech].desc, kind: "good", month: mes });
+          researching = null;
+        } else {
+          researching = { ...researching, mesesRestantes: r };
+        }
+      }
+
+      if (salariosImpagos) {
+        eventos.unshift({ id: `imp${mes}`, title: "Sueldos impagos", description: "No alcanzaron los pesos para pagar la planilla. La moral se desplomó.", kind: "bad", month: mes });
+      }
+
       const patrimonio = pesos + state.dolares * tc2 - deuda +
         fincas2.reduce((s, f) => s + f.stock * 50, 0) +
         state.factories.reduce((s, fa) => s + fa.processed * 200, 0) +
         pendingExports.reduce((s, p) => s + p.usd * tc2, 0);
 
-      const history = [...state.history, { month: mes, inflacion: Math.round(inflacionAcumulada), patrimonio: Math.round(patrimonio) }].slice(-36);
+      const history = [...state.history, { month: mes, inflacion: Math.round(inflacionAcumulada), patrimonio: Math.round(patrimonio), deuda: Math.round(deuda) }].slice(-36);
 
       return {
         ...state,
@@ -354,6 +372,8 @@ function reducer(state: GameState, action: Action): GameState {
         pendingExports,
         personalDisponible,
         moratoria,
+        researching,
+        tech,
       };
     }
 
