@@ -395,7 +395,7 @@ function reducer(state: GameState, action: Action): GameState {
       const f = state.fincas.find((x) => x.id === action.fincaId);
       if (!f) return state;
       const amt = Math.min(action.amount, f.stock);
-      const precio = f.type === "vid" ? 1200 : f.type === "olivo" ? 900 : 1500;
+      const precio = f.type === "vid" ? 1200 : f.type === "olivo" ? 900 : 2400;
       const ingreso = amt * precio;
       return {
         ...state,
@@ -426,7 +426,7 @@ function reducer(state: GameState, action: Action): GameState {
       if (!fa) return state;
       const amt = Math.min(action.amount, fa.processed);
       if (amt <= 0) return state;
-      const baseFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 12;
+      const baseFOB = fa.type === "bodega" ? 8 : fa.type === "almazara" ? 6 : 22;
       const precioFOB = state.tech.drones ? baseFOB * 1.15 : baseFOB;
       const bruto = amt * precioFOB;
       const neto = bruto * (1 - state.retenciones / 100);
@@ -557,13 +557,14 @@ function reducer(state: GameState, action: Action): GameState {
     case "RESEARCH": {
       const info = TECH_INFO[action.tech];
       if (state.tech[action.tech]) return state;
+      if (state.researching) return state;
       if (state.pesos < info.cost) return state;
       return {
         ...state,
         pesos: state.pesos - info.cost,
-        tech: { ...state.tech, [action.tech]: true },
+        researching: { tech: action.tech, mesesRestantes: info.meses },
         eventos: [
-          { id: `tech${Date.now()}`, title: `I+D: ${info.name}`, description: info.desc, kind: "good" as const, month: state.mes },
+          { id: `tech${Date.now()}`, title: `I+D iniciada: ${info.name}`, description: `Inversión de ${(info.cost / 1_000_000).toFixed(1)}M. Lista en ${info.meses} mes(es).`, kind: "info" as const, month: state.mes },
           ...state.eventos,
         ].slice(0, 20),
       };
