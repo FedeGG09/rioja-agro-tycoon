@@ -609,6 +609,7 @@ interface Ctx {
   factoryLabel: typeof factoryLabel;
   factoryFor: typeof factoryFor;
   isHarvestMonth: typeof isHarvestMonth;
+  resetGame: () => void;
 }
 
 const GameCtx = createContext<Ctx | null>(null);
