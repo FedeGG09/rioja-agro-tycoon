@@ -27,6 +27,9 @@ if (typeof window !== "undefined") {
   });
 }
 
+// Vegetación decorativa del Valle riojano (jarilla, algarrobo, piedras)
+const DECOR = ["🌵", "🪨", "🌿", "🌾", "🪵", "🌳"] as const;
+
 function rotPct(stock: number, capacidad: number) {
   if (capacidad <= 0 || stock <= capacidad) return 0;
   return Math.min(1, (stock - capacidad) / Math.max(capacidad, 1));
