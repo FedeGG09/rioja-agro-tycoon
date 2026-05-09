@@ -238,10 +238,13 @@ function reducer(state: GameState, action: Action): GameState {
       const totalTrab = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
       const costoSalarios = totalTrab * state.salarioMensual;
       const ratioBlue = state.dolarBlue / state.tipoDeCambio;
-      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * (state.factories.length || 1));
+      const insumosMult = state.tech.riego ? 0.85 : 1;
+      const inflacionMitigada = state.tech.drones ? 0.7 : 1;
+      const costoInsumos = Math.round(state.costoInsumosMensual * ratioBlue * insumosMult * (state.factories.length || 1));
+      const salariosImpagos = costoSalarios > state.pesos;
       let pesos = state.pesos - costoSalarios - costoInsumos;
 
-      const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8));
+      const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8) * inflacionMitigada);
       const inflacionAcumulada = state.inflacionAcumulada + state.inflacionMensual;
 
       const tipoDeCambio = Math.round(state.tipoDeCambio * (1 + state.inflacionMensual / 100 - 0.005));
@@ -249,8 +252,9 @@ function reducer(state: GameState, action: Action): GameState {
       const dolarBlue = Math.round(tipoDeCambio * (1 + brecha / 100));
 
       const moralDelta = (state.ultimoAumento - state.inflacionMensual) * 0.8;
-      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1));
-      const huelga = moralTrabajadores <= 0;
+      const moralPenalSalarios = salariosImpagos ? 25 : 0;
+      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios));
+      const huelga = moralTrabajadores <= 20;
 
       const eventos = [...state.eventos];
       if (Math.random() < 0.18) {
