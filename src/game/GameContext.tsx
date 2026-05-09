@@ -613,10 +613,50 @@ interface Ctx {
 
 const GameCtx = createContext<Ctx | null>(null);
 
+const SAVE_KEY = "lra_tycoon_v4_save";
+
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const lastSavedMes = useRef(state.mes);
+  const loadedRef = useRef(false);
+
+  // Cargar al iniciar
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(SAVE_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as GameState;
+        if (parsed && typeof parsed.mes === "number") {
+          // Defaults para campos nuevos por compatibilidad
+          if (!parsed.researching) parsed.researching = null;
+          if (!parsed.tech) parsed.tech = { riego: false, mecanizacion: false, drones: false };
+          if (!parsed.moratoria) parsed.moratoria = initial.moratoria;
+          if (!parsed.personalDisponible) parsed.personalDisponible = generatePool(6, parsed.salarioMensual ?? 350_000);
+          if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
+          dispatch({ type: "LOAD_STATE", state: parsed });
+          lastSavedMes.current = parsed.mes;
+        }
+      }
+    } catch (err) {
+      console.warn("[save] no pude restaurar partida", err);
+    }
+  }, []);
+
+  // Auto-save al cambiar de mes
+  useEffect(() => {
+    if (state.mes !== lastSavedMes.current) {
+      lastSavedMes.current = state.mes;
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+      } catch (err) {
+        console.warn("[save] localStorage lleno", err);
+      }
+    }
+  }, [state]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -625,8 +665,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, []);
 
+  const resetGame = () => {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { void e; }
+    dispatch({ type: "RESET_GAME" });
+  };
+
   return (
-    <GameCtx.Provider value={{ state, dispatch, cropLabel, factoryLabel, factoryFor, isHarvestMonth }}>
+    <GameCtx.Provider value={{ state, dispatch, cropLabel, factoryLabel, factoryFor, isHarvestMonth, resetGame }}>
       {children}
     </GameCtx.Provider>
   );
