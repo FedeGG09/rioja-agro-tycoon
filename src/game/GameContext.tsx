@@ -593,6 +593,12 @@ function reducer(state: GameState, action: Action): GameState {
         ].slice(0, 20),
       };
     }
+
+    case "RESET_GAME":
+      return initial;
+
+    case "LOAD_STATE":
+      return action.state;
   }
 }
 
