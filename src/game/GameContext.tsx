@@ -169,7 +169,9 @@ type Action =
   | { type: "LIQUIDAR"; usd: number }
   | { type: "BUY_FINCA"; cropType: CropType }
   | { type: "RESEARCH"; tech: TechId }
-  | { type: "TAKE_MORATORIA" };
+  | { type: "TAKE_MORATORIA" }
+  | { type: "RESET_GAME" }
+  | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
   vid: "bodega",
