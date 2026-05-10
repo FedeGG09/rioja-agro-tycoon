@@ -621,7 +621,61 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     case "RESET_GAME":
-      return initial;
+      return { ...initial, map: generateMap(42) };
+
+    case "BUY_PARCEL": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || cell.owned) return state;
+      const cost = parcelCost(action.x, action.y);
+      if (state.pesos < cost) return state;
+      const map = state.map.map((row) => row.map((c) => c.x === action.x && c.y === action.y ? { ...c, owned: true } : c));
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        map,
+        eventos: [
+          { id: `parc${Date.now()}`, title: "Parcela adquirida", description: `Compra de tierras en (${action.x},${action.y}) por ${fmtPesos(cost)}.`, kind: "info" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
+      };
+    }
+
+    case "PLACE_INFRA": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !isBuildable(cell)) return state;
+      // No pisar fincas, fábricas u otra infra
+      if (state.fincas.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.factories.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.infra.some((f) => f.x === action.x && f.y === action.y)) return state;
+      const info = INFRA_INFO[action.infraType];
+      if (state.pesos < info.cost) return state;
+      const id = `in${Date.now()}`;
+      return {
+        ...state,
+        pesos: state.pesos - info.cost,
+        infra: [...state.infra, { id, type: action.infraType, x: action.x, y: action.y }],
+        eventos: [
+          { id: `inf${Date.now()}`, title: `Construido: ${info.name}`, description: `${info.icon} en (${action.x},${action.y}). ${info.desc}`, kind: "good" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
+      };
+    }
+
+    case "PLACE_FINCA_AT": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !isBuildable(cell)) return state;
+      if (state.fincas.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.factories.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.infra.some((f) => f.x === action.x && f.y === action.y)) return state;
+      const cost = 800_000;
+      if (state.pesos < cost) return state;
+      const name = FINCA_NAMES[state.fincas.length % FINCA_NAMES.length];
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        fincas: [...state.fincas, { id: `f${Date.now()}`, x: action.x, y: action.y, type: action.cropType, name, stock: 0, growth: 10 }],
+      };
+    }
 
     case "LOAD_STATE":
       return action.state;
