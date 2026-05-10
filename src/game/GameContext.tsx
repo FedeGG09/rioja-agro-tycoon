@@ -756,6 +756,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (!parsed.moratoria) parsed.moratoria = initial.moratoria;
           if (!parsed.personalDisponible) parsed.personalDisponible = generatePool(6, parsed.salarioMensual ?? 350_000);
           if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
+          if (!parsed.map || !Array.isArray(parsed.map) || parsed.map.length !== MAP_SIZE) parsed.map = generateMap(42);
+          if (!parsed.infra) parsed.infra = [];
           dispatch({ type: "LOAD_STATE", state: parsed });
           lastSavedMes.current = parsed.mes;
         }
