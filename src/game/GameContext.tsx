@@ -1,9 +1,27 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
 import { generatePool, generateWorker, type Worker } from "./workers";
+import { generateMap, parcelCost, manhattan, inRange, isBuildable, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
 
 export type CropType = "vid" | "olivo" | "nogal";
 export type FactoryType = "bodega" | "almazara" | "nuez";
 export type TechId = "riego" | "mecanizacion" | "drones";
+export type InfraType = "vivienda1" | "vivienda2" | "vivienda3" | "comedor" | "salud" | "pozo";
+
+export interface InfraBuilding {
+  id: string;
+  type: InfraType;
+  x: number;
+  y: number;
+}
+
+export const INFRA_INFO: Record<InfraType, { name: string; cost: number; icon: string; desc: string; capacity?: number; radius?: number }> = {
+  vivienda1: { name: "Campamento", cost: 800_000, icon: "⛺", desc: "Capacidad 10 · moral base 40", capacity: 10 },
+  vivienda2: { name: "Casas de Finca", cost: 3_000_000, icon: "🏡", desc: "Capacidad 25 · moral base 60", capacity: 25 },
+  vivienda3: { name: "Barrio Agrícola Pro", cost: 10_000_000, icon: "🏘️", desc: "Capacidad 60 · moral base 80", capacity: 60 },
+  comedor:   { name: "Comedor Comunitario", cost: 1_500_000, icon: "🍲", desc: "+15 moral en radio 4 · -20% rotación", radius: 4 },
+  salud:     { name: "Puesto de Salud", cost: 4_000_000, icon: "⛑️", desc: "−50% bajas · mitiga Zonda", radius: 5 },
+  pozo:      { name: "Pozo de Agua", cost: 2_000_000, icon: "💧", desc: "Riego radio 3 · evita -50% rendimiento", radius: 3 },
+};
 
 export interface Finca {
   id: string;
@@ -97,6 +115,9 @@ export interface GameState {
   researching: Researching | null;
   // Moratoria
   moratoria: Moratoria;
+  // v5: Mapa 20x20 + infraestructura social
+  map: Cell[][];
+  infra: InfraBuilding[];
 }
 
 const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán", "Sañogasta", "Malligasta"];
@@ -129,14 +150,14 @@ const initial: GameState = {
   ultimoAumento: 0,
   mes: 1,
   fincas: [
-    { id: "f1", x: 0, y: 0, type: "vid", name: "Famatina", stock: 0, growth: 30 },
-    { id: "f2", x: 2, y: 0, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
-    { id: "f3", x: 0, y: 2, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
-    { id: "f4", x: 2, y: 2, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
+    { id: "f1", x: CENTER.x - 2, y: CENTER.y - 2, type: "vid", name: "Famatina", stock: 0, growth: 30 },
+    { id: "f2", x: CENTER.x + 1, y: CENTER.y - 2, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
+    { id: "f3", x: CENTER.x - 2, y: CENTER.y + 1, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
+    { id: "f4", x: CENTER.x + 1, y: CENTER.y + 1, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
   ],
   factories: [],
   eventos: [
-    { id: "e0", title: "Bienvenido a La Rioja", description: "Comienza la temporada en el Valle del Bermejo. Que el Zonda te sea leve.", kind: "info", month: 1 },
+    { id: "e0", title: "Bienvenido a La Rioja v5", description: "Mapa 20×20 desbloqueado. Construí viviendas, comedor y pozo cerca de tus fincas para mantener la moral alta.", kind: "info", month: 1 },
   ],
   history: [],
   paused: false,
@@ -148,6 +169,8 @@ const initial: GameState = {
   tech: { riego: false, mecanizacion: false, drones: false },
   researching: null,
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
+  map: generateMap(42),
+  infra: [],
 };
 
 type Action =
@@ -171,6 +194,9 @@ type Action =
   | { type: "RESEARCH"; tech: TechId }
   | { type: "TAKE_MORATORIA" }
   | { type: "RESET_GAME" }
+  | { type: "BUY_PARCEL"; x: number; y: number }
+  | { type: "PLACE_INFRA"; infraType: InfraType; x: number; y: number }
+  | { type: "PLACE_FINCA_AT"; cropType: CropType; x: number; y: number }
   | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
@@ -217,13 +243,41 @@ function reducer(state: GameState, action: Action): GameState {
       const harvest = isHarvestMonth(mes);
       const yieldMult = state.tech.riego ? 1.2 : 1;
       const capacidad = (state.trabajadoresPermanentes + state.trabajadoresGolondrina) * 200;
+
+      // ── v5: Cobertura social/agua e índice de proximidad ───────────
+      const pozos = state.infra.filter((b) => b.type === "pozo");
+      const comedores = state.infra.filter((b) => b.type === "comedor");
+      const saluds = state.infra.filter((b) => b.type === "salud");
+      const viviendas = state.infra.filter((b) => b.type === "vivienda1" || b.type === "vivienda2" || b.type === "vivienda3");
+      const housingCapacity = viviendas.reduce((s, v) => s + (INFRA_INFO[v.type].capacity || 0), 0);
+      const totalTrab0 = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
+      const housingDeficit = Math.max(0, totalTrab0 - housingCapacity);
+      const fincaHasWater = (f: Finca) => pozos.length === 0 ? false : pozos.some((p) => inRange(p, f, INFRA_INFO.pozo.radius || 3));
+      const fincaHasComedor = (f: Finca) => comedores.some((c) => inRange(c, f, INFRA_INFO.comedor.radius || 4));
+      const fincaHasSalud = (f: Finca) => saluds.some((s) => inRange(s, f, INFRA_INFO.salud.radius || 5));
+
+      // Proximidad vivienda → finca: si distancia mínima > 5 → desgaste -10
+      let proximidadPenal = 0;
+      let proximidadOk = 0;
+      for (const f of state.fincas) {
+        if (viviendas.length === 0) { proximidadPenal++; continue; }
+        const dMin = Math.min(...viviendas.map((v) => manhattan(v, f)));
+        if (dMin > 5) proximidadPenal++;
+        else proximidadOk++;
+      }
+      const proximityDelta = -proximidadPenal * 2;       // -2 moral por finca lejana
+      const comedorDelta = state.fincas.filter(fincaHasComedor).length * 1.5;
+      const saludDelta = state.fincas.filter(fincaHasSalud).length * 0.8;
+      const housingPenal = housingDeficit > 0 ? -Math.min(20, housingDeficit * 0.6) : 0;
+
       let usadoCap = 0;
       const fincas = state.fincas.map((f) => {
         let growth = Math.min(100, f.growth + (harvest ? 8 : 4));
         let stock = f.stock;
+        const waterMult = pozos.length === 0 || fincaHasWater(f) ? 1 : 0.5; // sin pozos al inicio no penaliza
         if (harvest && growth >= 80) {
           const baseRend = (f.type === "vid" || f.type === "olivo") ? yieldMult : 1;
-          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend);
+          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult);
           const restante = Math.max(0, capacidad - usadoCap);
           const cosechado = Math.min(potencial, restante);
           const perdido = potencial - cosechado;
@@ -256,7 +310,10 @@ function reducer(state: GameState, action: Action): GameState {
 
       const moralDelta = (state.ultimoAumento - state.inflacionMensual) * 0.8;
       const moralPenalSalarios = salariosImpagos ? 25 : 0;
-      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios));
+      const moralTrabajadores = Math.max(
+        0,
+        Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios + comedorDelta + saludDelta + proximityDelta + housingPenal),
+      );
       const huelga = moralTrabajadores <= 20;
 
       const eventos = [...state.eventos];
@@ -275,10 +332,17 @@ function reducer(state: GameState, action: Action): GameState {
       let tc2 = tipoDeCambio;
       const last = eventos[0];
       if (last && last.month === mes) {
-        if (last.title === "Viento Zonda") moral2 = Math.max(0, moral2 - 15);
+        if (last.title === "Viento Zonda") {
+          // Salud mitiga el zonda 50% por cada finca cubierta
+          const fincasCubiertas = state.fincas.filter(fincaHasSalud).length;
+          const totalF = Math.max(1, state.fincas.length);
+          const factor = 1 - 0.5 * (fincasCubiertas / totalF);
+          moral2 = Math.max(0, moral2 - 15 * factor);
+        }
         if (last.title === "Helada Tardía") fincas2 = fincas.map((f) => ({ ...f, stock: Math.floor(f.stock * 0.7) }));
         if (last.title === "Devaluación") tc2 = Math.round(tc2 * 1.15);
       }
+      void proximidadOk;
 
       const due = state.pendingExports.filter((p) => p.monthDue <= mes);
       const pendingExports = state.pendingExports.filter((p) => p.monthDue > mes);
@@ -595,7 +659,61 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     case "RESET_GAME":
-      return initial;
+      return { ...initial, map: generateMap(42) };
+
+    case "BUY_PARCEL": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || cell.owned) return state;
+      const cost = parcelCost(action.x, action.y);
+      if (state.pesos < cost) return state;
+      const map = state.map.map((row) => row.map((c) => c.x === action.x && c.y === action.y ? { ...c, owned: true } : c));
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        map,
+        eventos: [
+          { id: `parc${Date.now()}`, title: "Parcela adquirida", description: `Compra de tierras en (${action.x},${action.y}) por ${fmtPesos(cost)}.`, kind: "info" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
+      };
+    }
+
+    case "PLACE_INFRA": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !isBuildable(cell)) return state;
+      // No pisar fincas, fábricas u otra infra
+      if (state.fincas.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.factories.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.infra.some((f) => f.x === action.x && f.y === action.y)) return state;
+      const info = INFRA_INFO[action.infraType];
+      if (state.pesos < info.cost) return state;
+      const id = `in${Date.now()}`;
+      return {
+        ...state,
+        pesos: state.pesos - info.cost,
+        infra: [...state.infra, { id, type: action.infraType, x: action.x, y: action.y }],
+        eventos: [
+          { id: `inf${Date.now()}`, title: `Construido: ${info.name}`, description: `${info.icon} en (${action.x},${action.y}). ${info.desc}`, kind: "good" as const, month: state.mes },
+          ...state.eventos,
+        ].slice(0, 20),
+      };
+    }
+
+    case "PLACE_FINCA_AT": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !isBuildable(cell)) return state;
+      if (state.fincas.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.factories.some((f) => f.x === action.x && f.y === action.y)) return state;
+      if (state.infra.some((f) => f.x === action.x && f.y === action.y)) return state;
+      const cost = 800_000;
+      if (state.pesos < cost) return state;
+      const name = FINCA_NAMES[state.fincas.length % FINCA_NAMES.length];
+      return {
+        ...state,
+        pesos: state.pesos - cost,
+        fincas: [...state.fincas, { id: `f${Date.now()}`, x: action.x, y: action.y, type: action.cropType, name, stock: 0, growth: 10 }],
+      };
+    }
 
     case "LOAD_STATE":
       return action.state;
@@ -614,7 +732,7 @@ interface Ctx {
 
 const GameCtx = createContext<Ctx | null>(null);
 
-const SAVE_KEY = "lra_tycoon_v4_save";
+const SAVE_KEY = "lra_tycoon_v5_save";
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
@@ -638,6 +756,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (!parsed.moratoria) parsed.moratoria = initial.moratoria;
           if (!parsed.personalDisponible) parsed.personalDisponible = generatePool(6, parsed.salarioMensual ?? 350_000);
           if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
+          if (!parsed.map || !Array.isArray(parsed.map) || parsed.map.length !== MAP_SIZE) parsed.map = generateMap(42);
+          if (!parsed.infra) parsed.infra = [];
           dispatch({ type: "LOAD_STATE", state: parsed });
           lastSavedMes.current = parsed.mes;
         }
