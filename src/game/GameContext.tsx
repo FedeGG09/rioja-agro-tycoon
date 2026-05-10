@@ -243,13 +243,41 @@ function reducer(state: GameState, action: Action): GameState {
       const harvest = isHarvestMonth(mes);
       const yieldMult = state.tech.riego ? 1.2 : 1;
       const capacidad = (state.trabajadoresPermanentes + state.trabajadoresGolondrina) * 200;
+
+      // ── v5: Cobertura social/agua e índice de proximidad ───────────
+      const pozos = state.infra.filter((b) => b.type === "pozo");
+      const comedores = state.infra.filter((b) => b.type === "comedor");
+      const saluds = state.infra.filter((b) => b.type === "salud");
+      const viviendas = state.infra.filter((b) => b.type === "vivienda1" || b.type === "vivienda2" || b.type === "vivienda3");
+      const housingCapacity = viviendas.reduce((s, v) => s + (INFRA_INFO[v.type].capacity || 0), 0);
+      const totalTrab0 = state.trabajadoresPermanentes + state.trabajadoresGolondrina;
+      const housingDeficit = Math.max(0, totalTrab0 - housingCapacity);
+      const fincaHasWater = (f: Finca) => pozos.length === 0 ? false : pozos.some((p) => inRange(p, f, INFRA_INFO.pozo.radius || 3));
+      const fincaHasComedor = (f: Finca) => comedores.some((c) => inRange(c, f, INFRA_INFO.comedor.radius || 4));
+      const fincaHasSalud = (f: Finca) => saluds.some((s) => inRange(s, f, INFRA_INFO.salud.radius || 5));
+
+      // Proximidad vivienda → finca: si distancia mínima > 5 → desgaste -10
+      let proximidadPenal = 0;
+      let proximidadOk = 0;
+      for (const f of state.fincas) {
+        if (viviendas.length === 0) { proximidadPenal++; continue; }
+        const dMin = Math.min(...viviendas.map((v) => manhattan(v, f)));
+        if (dMin > 5) proximidadPenal++;
+        else proximidadOk++;
+      }
+      const proximityDelta = -proximidadPenal * 2;       // -2 moral por finca lejana
+      const comedorDelta = state.fincas.filter(fincaHasComedor).length * 1.5;
+      const saludDelta = state.fincas.filter(fincaHasSalud).length * 0.8;
+      const housingPenal = housingDeficit > 0 ? -Math.min(20, housingDeficit * 0.6) : 0;
+
       let usadoCap = 0;
       const fincas = state.fincas.map((f) => {
         let growth = Math.min(100, f.growth + (harvest ? 8 : 4));
         let stock = f.stock;
+        const waterMult = pozos.length === 0 || fincaHasWater(f) ? 1 : 0.5; // sin pozos al inicio no penaliza
         if (harvest && growth >= 80) {
           const baseRend = (f.type === "vid" || f.type === "olivo") ? yieldMult : 1;
-          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend);
+          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult);
           const restante = Math.max(0, capacidad - usadoCap);
           const cosechado = Math.min(potencial, restante);
           const perdido = potencial - cosechado;
@@ -282,7 +310,10 @@ function reducer(state: GameState, action: Action): GameState {
 
       const moralDelta = (state.ultimoAumento - state.inflacionMensual) * 0.8;
       const moralPenalSalarios = salariosImpagos ? 25 : 0;
-      const moralTrabajadores = Math.max(0, Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios));
+      const moralTrabajadores = Math.max(
+        0,
+        Math.min(100, state.moralTrabajadores + moralDelta - 1 - moralPenalSalarios + comedorDelta + saludDelta + proximityDelta + housingPenal),
+      );
       const huelga = moralTrabajadores <= 20;
 
       const eventos = [...state.eventos];
@@ -301,10 +332,17 @@ function reducer(state: GameState, action: Action): GameState {
       let tc2 = tipoDeCambio;
       const last = eventos[0];
       if (last && last.month === mes) {
-        if (last.title === "Viento Zonda") moral2 = Math.max(0, moral2 - 15);
+        if (last.title === "Viento Zonda") {
+          // Salud mitiga el zonda 50% por cada finca cubierta
+          const fincasCubiertas = state.fincas.filter(fincaHasSalud).length;
+          const totalF = Math.max(1, state.fincas.length);
+          const factor = 1 - 0.5 * (fincasCubiertas / totalF);
+          moral2 = Math.max(0, moral2 - 15 * factor);
+        }
         if (last.title === "Helada Tardía") fincas2 = fincas.map((f) => ({ ...f, stock: Math.floor(f.stock * 0.7) }));
         if (last.title === "Devaluación") tc2 = Math.round(tc2 * 1.15);
       }
+      void proximidadOk;
 
       const due = state.pendingExports.filter((p) => p.monthDue <= mes);
       const pendingExports = state.pendingExports.filter((p) => p.monthDue > mes);
