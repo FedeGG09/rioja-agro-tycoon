@@ -150,14 +150,14 @@ const initial: GameState = {
   ultimoAumento: 0,
   mes: 1,
   fincas: [
-    { id: "f1", x: 0, y: 0, type: "vid", name: "Famatina", stock: 0, growth: 30 },
-    { id: "f2", x: 2, y: 0, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
-    { id: "f3", x: 0, y: 2, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
-    { id: "f4", x: 2, y: 2, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
+    { id: "f1", x: CENTER.x - 2, y: CENTER.y - 2, type: "vid", name: "Famatina", stock: 0, growth: 30 },
+    { id: "f2", x: CENTER.x + 1, y: CENTER.y - 2, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
+    { id: "f3", x: CENTER.x - 2, y: CENTER.y + 1, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
+    { id: "f4", x: CENTER.x + 1, y: CENTER.y + 1, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
   ],
   factories: [],
   eventos: [
-    { id: "e0", title: "Bienvenido a La Rioja", description: "Comienza la temporada en el Valle del Bermejo. Que el Zonda te sea leve.", kind: "info", month: 1 },
+    { id: "e0", title: "Bienvenido a La Rioja v5", description: "Mapa 20×20 desbloqueado. Construí viviendas, comedor y pozo cerca de tus fincas para mantener la moral alta.", kind: "info", month: 1 },
   ],
   history: [],
   paused: false,
@@ -169,6 +169,8 @@ const initial: GameState = {
   tech: { riego: false, mecanizacion: false, drones: false },
   researching: null,
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
+  map: generateMap(42),
+  infra: [],
 };
 
 type Action =
