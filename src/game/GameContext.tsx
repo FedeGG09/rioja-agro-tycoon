@@ -115,6 +115,9 @@ export interface GameState {
   researching: Researching | null;
   // Moratoria
   moratoria: Moratoria;
+  // v5: Mapa 20x20 + infraestructura social
+  map: Cell[][];
+  infra: InfraBuilding[];
 }
 
 const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán", "Sañogasta", "Malligasta"];
