@@ -194,6 +194,9 @@ type Action =
   | { type: "RESEARCH"; tech: TechId }
   | { type: "TAKE_MORATORIA" }
   | { type: "RESET_GAME" }
+  | { type: "BUY_PARCEL"; x: number; y: number }
+  | { type: "PLACE_INFRA"; infraType: InfraType; x: number; y: number }
+  | { type: "PLACE_FINCA_AT"; cropType: CropType; x: number; y: number }
   | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
