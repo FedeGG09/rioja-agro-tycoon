@@ -732,7 +732,7 @@ interface Ctx {
 
 const GameCtx = createContext<Ctx | null>(null);
 
-const SAVE_KEY = "lra_tycoon_v4_save";
+const SAVE_KEY = "lra_tycoon_v5_save";
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
