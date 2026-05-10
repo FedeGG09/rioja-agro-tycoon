@@ -1,9 +1,27 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
 import { generatePool, generateWorker, type Worker } from "./workers";
+import { generateMap, parcelCost, manhattan, inRange, isBuildable, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
 
 export type CropType = "vid" | "olivo" | "nogal";
 export type FactoryType = "bodega" | "almazara" | "nuez";
 export type TechId = "riego" | "mecanizacion" | "drones";
+export type InfraType = "vivienda1" | "vivienda2" | "vivienda3" | "comedor" | "salud" | "pozo";
+
+export interface InfraBuilding {
+  id: string;
+  type: InfraType;
+  x: number;
+  y: number;
+}
+
+export const INFRA_INFO: Record<InfraType, { name: string; cost: number; icon: string; desc: string; capacity?: number; radius?: number }> = {
+  vivienda1: { name: "Campamento", cost: 800_000, icon: "⛺", desc: "Capacidad 10 · moral base 40", capacity: 10 },
+  vivienda2: { name: "Casas de Finca", cost: 3_000_000, icon: "🏡", desc: "Capacidad 25 · moral base 60", capacity: 25 },
+  vivienda3: { name: "Barrio Agrícola Pro", cost: 10_000_000, icon: "🏘️", desc: "Capacidad 60 · moral base 80", capacity: 60 },
+  comedor:   { name: "Comedor Comunitario", cost: 1_500_000, icon: "🍲", desc: "+15 moral en radio 4 · -20% rotación", radius: 4 },
+  salud:     { name: "Puesto de Salud", cost: 4_000_000, icon: "⛑️", desc: "−50% bajas · mitiga Zonda", radius: 5 },
+  pozo:      { name: "Pozo de Agua", cost: 2_000_000, icon: "💧", desc: "Riego radio 3 · evita -50% rendimiento", radius: 3 },
+};
 
 export interface Finca {
   id: string;
