@@ -839,11 +839,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
+    if (state.paused || state.simSpeed === 0) return;
+    // 12s @ 1×, 6s @ 2×, 3s @ 4×
+    const intervalMs = Math.round(12000 / state.simSpeed);
     const id = setInterval(() => {
       if (!stateRef.current.paused) dispatch({ type: "TICK" });
-    }, 20_000);
+    }, intervalMs);
     return () => clearInterval(id);
-  }, []);
+  }, [state.simSpeed, state.paused]);
 
   const resetGame = () => {
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { void e; }
