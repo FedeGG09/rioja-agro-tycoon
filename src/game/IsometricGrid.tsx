@@ -401,6 +401,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
             onClick={() => {
               if (isActive(it.key)) setTool(null);
               else if (it.kind === "buy") setTool({ kind: "buy" });
+              else if (it.kind === "road") setTool({ kind: "road" });
               else if (it.kind === "factory") setTool({ kind: "factory", type: it.key as FactoryType });
               else setTool({ kind: "infra", type: it.key as InfraType });
             }}
