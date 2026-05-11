@@ -481,6 +481,8 @@ function reducer(state: GameState, action: Action): GameState {
         moratoria,
         researching,
         tech,
+        dolares: dolaresAcum,
+        licitacionActiva,
       };
     }
 
