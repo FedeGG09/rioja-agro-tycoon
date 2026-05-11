@@ -630,14 +630,30 @@ const Cell = memo(function Cell({
         )}
       </AnimatePresence>
 
-      {/* Infra: emoji + label */}
+      {/* Infra: HD sprite + label */}
       {inf && (
-        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 select-none" style={{ top: -TILE_H * 0.4 }}>
-          <div className="text-3xl drop-shadow-[0_6px_8px_rgba(0,0,0,0.6)]">{INFRA_INFO[inf.type].icon}</div>
-          <div className="absolute left-1/2 top-[110%] -translate-x-1/2 whitespace-nowrap rounded-md bg-black/65 px-1 py-[1px] text-[8px] font-bold text-white">
+        <>
+          <motion.img
+            initial={{ opacity: 0, scale: 0.5, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 220, damping: 18 }}
+            src={infraImg[inf.type]}
+            alt=""
+            draggable={false}
+            decoding="async"
+            className="pointer-events-none absolute select-none"
+            style={{
+              left: TILE_W * 0.05,
+              top: -TILE_H * 0.6,
+              width: TILE_W * 0.95,
+              height: TILE_W * 0.95,
+              filter: "drop-shadow(0 8px 10px rgba(0,0,0,0.6))",
+            }}
+          />
+          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/65 px-1 py-[1px] text-[8px] font-bold text-white" style={{ top: -TILE_H * 0.6 - 12 }}>
             {INFRA_INFO[inf.type].name}
           </div>
-        </div>
+        </>
       )}
 
       {/* Coverage radius hint when infra selected (only for water/comedor/salud) */}
