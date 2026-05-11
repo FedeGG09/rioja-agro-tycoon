@@ -174,6 +174,8 @@ const initial: GameState = {
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
   map: generateMap(42),
   infra: [],
+  simSpeed: 1,
+  licitacionActiva: null,
 };
 
 type Action =
