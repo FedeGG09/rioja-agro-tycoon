@@ -118,6 +118,9 @@ export interface GameState {
   // v5: Mapa 20x20 + infraestructura social
   map: Cell[][];
   infra: InfraBuilding[];
+  // Bloque 4: tiempo real
+  simSpeed: 0 | 1 | 2 | 4; // 0 = pausa
+  licitacionActiva: { mesFin: number; bonusUSD: number } | null;
 }
 
 const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán", "Sañogasta", "Malligasta"];
