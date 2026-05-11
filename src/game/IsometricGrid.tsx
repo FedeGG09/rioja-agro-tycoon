@@ -241,6 +241,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             const isSelected = !!(f && selectedId === f.id);
             const rot = f ? rotPct(f.stock, capacidad) : 0;
             const flashing = flash === `${x},${y}`;
+            const connected = (f || fa) ? (hasAnyRoad ? isConnected(x, y, reach) : true) : true;
 
             // Highlight valid targets for active tool
             let validTarget = false;
@@ -252,6 +253,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
               } else if (tool.kind === "infra") {
                 validTarget = !f && !fa && !inf;
                 invalidTarget = !validTarget;
+              } else if (tool.kind === "road") {
+                validTarget = !cell.road;
+                invalidTarget = false;
               }
             }
             if (tool?.kind === "buy" && !cell.owned) validTarget = true;
