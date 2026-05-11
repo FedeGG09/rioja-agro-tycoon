@@ -815,6 +815,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
           if (!parsed.map || !Array.isArray(parsed.map) || parsed.map.length !== MAP_SIZE) parsed.map = generateMap(42);
           if (!parsed.infra) parsed.infra = [];
+          if (typeof parsed.simSpeed !== "number") parsed.simSpeed = 1;
+          if (parsed.licitacionActiva === undefined) parsed.licitacionActiva = null;
           dispatch({ type: "LOAD_STATE", state: parsed });
           lastSavedMes.current = parsed.mes;
         }
