@@ -423,7 +423,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
 
 // ─── Cell ────────────────────────────────────────────────────────
 interface CellProps {
-  cell: { x: number; y: number; terrain: string; elevation: number; owned: boolean };
+  cell: { x: number; y: number; terrain: string; elevation: number; owned: boolean; road?: boolean };
   pos: { left: number; top: number };
   z: number;
   finca?: Finca;
@@ -434,11 +434,12 @@ interface CellProps {
   flashing: boolean;
   validTarget: boolean;
   invalidTarget: boolean;
+  connected: boolean;
   onClick: () => void;
 }
 
 const Cell = memo(function Cell({
-  cell, pos, z, finca: f, factory: fa, infra: inf, isSelected, rot, flashing, validTarget, invalidTarget, onClick,
+  cell, pos, z, finca: f, factory: fa, infra: inf, isSelected, rot, flashing, validTarget, invalidTarget, connected, onClick,
 }: CellProps) {
   const elevation = cell.terrain === "cerro" ? cell.elevation * 8 : 0;
 
