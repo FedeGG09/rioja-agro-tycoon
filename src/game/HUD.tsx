@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useGame, fmtPesos, fmtUSD, monthName } from "./GameContext";
-import { Pause, Play, TrendingUp, TrendingDown, DollarSign, Coins, Flame, Users, Calendar, AlertTriangle, RotateCcw, Save } from "lucide-react";
+import { Pause, Play, TrendingUp, TrendingDown, DollarSign, Coins, Flame, Users, Calendar, AlertTriangle, RotateCcw, Save, FastForward, Gauge } from "lucide-react";
 
 export function HUD() {
   const { state, dispatch, resetGame } = useGame();
