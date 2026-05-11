@@ -173,7 +173,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const onPanEnd = () => { panDragRef.current = null; };
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(2.5, z - e.deltaY * 0.001)));
+    setZoom((z) => Math.max(0.4, Math.min(3.5, z - e.deltaY * 0.001)));
   };
 
   const fincaByXY = useMemo(() => {
@@ -333,7 +333,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
         </div>
 
         <div className="glass absolute right-2 top-2 flex flex-col gap-1 rounded-xl p-1 z-[800]">
-          <button onClick={() => setZoom((z) => Math.min(2.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
+          <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
             <ZoomIn size={14} />
           </button>
           <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
