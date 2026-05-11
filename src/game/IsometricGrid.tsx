@@ -62,6 +62,7 @@ type Tool =
   | { kind: "factory"; type: FactoryType }
   | { kind: "infra"; type: InfraType }
   | { kind: "buy" }
+  | { kind: "road" }
   | null;
 
 export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) => void; selectedId?: string }) {
