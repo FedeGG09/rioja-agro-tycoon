@@ -722,6 +722,21 @@ function reducer(state: GameState, action: Action): GameState {
       };
     }
 
+    case "TOGGLE_ROAD": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !cell.owned) return state;
+      if (cell.terrain === "cerro" || cell.terrain === "rio" || cell.terrain === "piedra") return state;
+      // Costo de tendido (gratis si ya hay road; saca si ya estaba)
+      const willPlace = !cell.road;
+      const cost = willPlace ? 80_000 : 0;
+      if (willPlace && state.pesos < cost) return state;
+      const map = state.map.map((row) => row.map((c) => c.x === action.x && c.y === action.y ? { ...c, road: !c.road } : c));
+      return { ...state, pesos: state.pesos - cost, map };
+    }
+
+    case "SET_SPEED":
+      return { ...state, simSpeed: action.value, paused: action.value === 0 };
+
     case "LOAD_STATE":
       return action.state;
   }
