@@ -191,6 +191,8 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     state.infra.forEach((b) => m.set(`${b.x},${b.y}`, b));
     return m;
   }, [state.infra]);
+  const reach = useMemo(() => computeRoadNetwork(state.map), [state.map]);
+  const hasAnyRoad = reach.size > 1;
 
   return (
     <div className="space-y-3">
