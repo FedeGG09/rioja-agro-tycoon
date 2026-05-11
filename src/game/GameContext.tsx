@@ -421,6 +421,34 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
 
+      // ── Bloque 4: Licitaciones de Exportación cada 6 meses ────────
+      let licitacionActiva = state.licitacionActiva;
+      let dolaresAcum = state.dolares;
+      if (licitacionActiva && mes >= licitacionActiva.mesFin) {
+        // Liquida bono USD
+        dolaresAcum += licitacionActiva.bonusUSD;
+        eventos.unshift({
+          id: `licdone${mes}`,
+          title: "💎 Licitación Premium liquidada",
+          description: `Cobraste US$${licitacionActiva.bonusUSD.toLocaleString("es-AR")} por la licitación de exportación premium.`,
+          kind: "good",
+          month: mes,
+        });
+        licitacionActiva = null;
+      }
+      if (mes > 1 && mes % 6 === 0 && !licitacionActiva) {
+        const baseBonus = 8000 + Math.round(Math.random() * 4000);
+        const bonusUSD = tech.drones ? Math.round(baseBonus * 1.2) : baseBonus;
+        licitacionActiva = { mesFin: mes + 3, bonusUSD };
+        eventos.unshift({
+          id: `lic${mes}`,
+          title: "📜 Licitación de Exportación",
+          description: `Adjudicación premium: US$${bonusUSD.toLocaleString("es-AR")} a cobrar en 3 meses${tech.drones ? " (+20% por Drones)" : ""}.`,
+          kind: "good",
+          month: mes,
+        });
+      }
+
       if (salariosImpagos) {
         eventos.unshift({ id: `imp${mes}`, title: "Sueldos impagos", description: "No alcanzaron los pesos para pagar la planilla. La moral se desplomó.", kind: "bad", month: mes });
       }
