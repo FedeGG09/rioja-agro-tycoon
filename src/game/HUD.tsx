@@ -107,6 +107,12 @@ export function HUD() {
         </div>
       )}
 
+      {state.licitacionActiva && (
+        <div className="mt-3 rounded-xl border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-2 text-xs text-[var(--gold)]">
+          📜 Licitación premium adjudicada: <b>US${state.licitacionActiva.bonusUSD.toLocaleString("es-AR")}</b> a cobrar el mes <b>{state.licitacionActiva.mesFin}</b>
+        </div>
+      )}
+
       {state.huelga && (
         <div className="mt-3 flex items-center gap-2 rounded-xl bg-destructive/20 border border-destructive/40 px-3 py-2 text-sm font-bold text-destructive">
           <AlertTriangle size={16} /> HUELGA — moral &lt; 20%. Aumentá salarios ya.
