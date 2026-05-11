@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
 import { generatePool, generateWorker, type Worker } from "./workers";
-import { generateMap, parcelCost, manhattan, inRange, isBuildable, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
+import { generateMap, parcelCost, manhattan, inRange, isBuildable, computeRoadNetwork, isConnected, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
 
 export type CropType = "vid" | "olivo" | "nogal";
 export type FactoryType = "bodega" | "almazara" | "nuez";
@@ -118,6 +118,9 @@ export interface GameState {
   // v5: Mapa 20x20 + infraestructura social
   map: Cell[][];
   infra: InfraBuilding[];
+  // Bloque 4: tiempo real
+  simSpeed: 0 | 1 | 2 | 4; // 0 = pausa
+  licitacionActiva: { mesFin: number; bonusUSD: number } | null;
 }
 
 const FINCA_NAMES = ["Famatina", "Chilecito", "Valle del Bermejo", "Nonogasta", "Vichigasta", "Anguinán", "Sañogasta", "Malligasta"];
@@ -171,6 +174,8 @@ const initial: GameState = {
   moratoria: { activa: false, cuotasRestantes: 0, cuotaMensual: 0, objetivoUSD: 0, exportadoUSD: 0, cumplida: false },
   map: generateMap(42),
   infra: [],
+  simSpeed: 1,
+  licitacionActiva: null,
 };
 
 type Action =
@@ -197,6 +202,8 @@ type Action =
   | { type: "BUY_PARCEL"; x: number; y: number }
   | { type: "PLACE_INFRA"; infraType: InfraType; x: number; y: number }
   | { type: "PLACE_FINCA_AT"; cropType: CropType; x: number; y: number }
+  | { type: "TOGGLE_ROAD"; x: number; y: number }
+  | { type: "SET_SPEED"; value: 0 | 1 | 2 | 4 }
   | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
@@ -256,6 +263,10 @@ function reducer(state: GameState, action: Action): GameState {
       const fincaHasComedor = (f: Finca) => comedores.some((c) => inRange(c, f, INFRA_INFO.comedor.radius || 4));
       const fincaHasSalud = (f: Finca) => saluds.some((s) => inRange(s, f, INFRA_INFO.salud.radius || 5));
 
+      // Red vial: BFS desde el almacén (CENTER). Fincas conectadas reciben full rendimiento.
+      const reach = computeRoadNetwork(state.map);
+      const fincaConectada = (f: Finca) => reach.size === 1 ? true : isConnected(f.x, f.y, reach);
+
       // Proximidad vivienda → finca: si distancia mínima > 5 → desgaste -10
       let proximidadPenal = 0;
       let proximidadOk = 0;
@@ -275,9 +286,10 @@ function reducer(state: GameState, action: Action): GameState {
         let growth = Math.min(100, f.growth + (harvest ? 8 : 4));
         let stock = f.stock;
         const waterMult = pozos.length === 0 || fincaHasWater(f) ? 1 : 0.5; // sin pozos al inicio no penaliza
+        const roadMult = fincaConectada(f) ? 1 : 0.6;
         if (harvest && growth >= 80) {
           const baseRend = (f.type === "vid" || f.type === "olivo") ? yieldMult : 1;
-          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult);
+          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult * roadMult);
           const restante = Math.max(0, capacidad - usadoCap);
           const cosechado = Math.min(potencial, restante);
           const perdido = potencial - cosechado;
@@ -409,6 +421,34 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
 
+      // ── Bloque 4: Licitaciones de Exportación cada 6 meses ────────
+      let licitacionActiva = state.licitacionActiva;
+      let dolaresAcum = state.dolares;
+      if (licitacionActiva && mes >= licitacionActiva.mesFin) {
+        // Liquida bono USD
+        dolaresAcum += licitacionActiva.bonusUSD;
+        eventos.unshift({
+          id: `licdone${mes}`,
+          title: "💎 Licitación Premium liquidada",
+          description: `Cobraste US$${licitacionActiva.bonusUSD.toLocaleString("es-AR")} por la licitación de exportación premium.`,
+          kind: "good",
+          month: mes,
+        });
+        licitacionActiva = null;
+      }
+      if (mes > 1 && mes % 6 === 0 && !licitacionActiva) {
+        const baseBonus = 8000 + Math.round(Math.random() * 4000);
+        const bonusUSD = tech.drones ? Math.round(baseBonus * 1.2) : baseBonus;
+        licitacionActiva = { mesFin: mes + 3, bonusUSD };
+        eventos.unshift({
+          id: `lic${mes}`,
+          title: "📜 Licitación de Exportación",
+          description: `Adjudicación premium: US$${bonusUSD.toLocaleString("es-AR")} a cobrar en 3 meses${tech.drones ? " (+20% por Drones)" : ""}.`,
+          kind: "good",
+          month: mes,
+        });
+      }
+
       if (salariosImpagos) {
         eventos.unshift({ id: `imp${mes}`, title: "Sueldos impagos", description: "No alcanzaron los pesos para pagar la planilla. La moral se desplomó.", kind: "bad", month: mes });
       }
@@ -441,6 +481,8 @@ function reducer(state: GameState, action: Action): GameState {
         moratoria,
         researching,
         tech,
+        dolares: dolaresAcum,
+        licitacionActiva,
       };
     }
 
@@ -715,6 +757,21 @@ function reducer(state: GameState, action: Action): GameState {
       };
     }
 
+    case "TOGGLE_ROAD": {
+      const cell = state.map[action.y]?.[action.x];
+      if (!cell || !cell.owned) return state;
+      if (cell.terrain === "cerro" || cell.terrain === "rio" || cell.terrain === "piedra") return state;
+      // Costo de tendido (gratis si ya hay road; saca si ya estaba)
+      const willPlace = !cell.road;
+      const cost = willPlace ? 80_000 : 0;
+      if (willPlace && state.pesos < cost) return state;
+      const map = state.map.map((row) => row.map((c) => c.x === action.x && c.y === action.y ? { ...c, road: !c.road } : c));
+      return { ...state, pesos: state.pesos - cost, map };
+    }
+
+    case "SET_SPEED":
+      return { ...state, simSpeed: action.value, paused: action.value === 0 };
+
     case "LOAD_STATE":
       return action.state;
   }
@@ -758,6 +815,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (!parsed.personalContratado) parsed.personalContratado = initial.personalContratado;
           if (!parsed.map || !Array.isArray(parsed.map) || parsed.map.length !== MAP_SIZE) parsed.map = generateMap(42);
           if (!parsed.infra) parsed.infra = [];
+          if (typeof parsed.simSpeed !== "number") parsed.simSpeed = 1;
+          if (parsed.licitacionActiva === undefined) parsed.licitacionActiva = null;
           dispatch({ type: "LOAD_STATE", state: parsed });
           lastSavedMes.current = parsed.mes;
         }
@@ -780,11 +839,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   useEffect(() => {
+    if (state.paused || state.simSpeed === 0) return;
+    // 12s @ 1×, 6s @ 2×, 3s @ 4×
+    const intervalMs = Math.round(12000 / state.simSpeed);
     const id = setInterval(() => {
       if (!stateRef.current.paused) dispatch({ type: "TICK" });
-    }, 20_000);
+    }, intervalMs);
     return () => clearInterval(id);
-  }, []);
+  }, [state.simSpeed, state.paused]);
 
   const resetGame = () => {
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { void e; }

@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useGame, INFRA_INFO, type Finca, type FactoryType, type InfraType } from "./GameContext";
-import { parcelCost, isBuildable, MAP_SIZE, CENTER } from "./MapEngine";
+import { parcelCost, computeRoadNetwork, isConnected, MAP_SIZE, CENTER } from "./MapEngine";
 import { ZoomIn, ZoomOut, Maximize2, Move, Lock, Mountain, Waves, X } from "lucide-react";
 import tileVid from "@/assets/tile-vid.png";
 import tileOlivo from "@/assets/tile-olivo.png";
@@ -11,11 +11,26 @@ import buildBodega from "@/assets/build-bodega.png";
 import buildAlmazara from "@/assets/build-almazara.png";
 import buildNuez from "@/assets/build-nuez.png";
 import buildWarehouse from "@/assets/build-warehouse.png";
+import buildVivienda1 from "@/assets/build-vivienda1.png";
+import buildVivienda2 from "@/assets/build-vivienda2.png";
+import buildVivienda3 from "@/assets/build-vivienda3.png";
+import buildComedor from "@/assets/build-comedor.png";
+import buildSalud from "@/assets/build-salud.png";
+import buildPozo from "@/assets/build-pozo.png";
 
 const tileImg: Record<string, string> = { vid: tileVid, olivo: tileOlivo, nogal: tileNogal };
 const factoryImg: Record<FactoryType, string> = { bodega: buildBodega, almazara: buildAlmazara, nuez: buildNuez };
+const infraImg: Record<InfraType, string> = {
+  vivienda1: buildVivienda1,
+  vivienda2: buildVivienda2,
+  vivienda3: buildVivienda3,
+  comedor: buildComedor,
+  salud: buildSalud,
+  pozo: buildPozo,
+};
 
-const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez, buildWarehouse];
+const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez, buildWarehouse,
+  buildVivienda1, buildVivienda2, buildVivienda3, buildComedor, buildSalud, buildPozo];
 if (typeof window !== "undefined") {
   ALL_SPRITES.forEach((src) => {
     const img = new Image();
@@ -47,6 +62,7 @@ type Tool =
   | { kind: "factory"; type: FactoryType }
   | { kind: "infra"; type: InfraType }
   | { kind: "buy" }
+  | { kind: "road" }
   | null;
 
 export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) => void; selectedId?: string }) {
@@ -81,9 +97,23 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const totalScale = fitScale * zoom;
   const boardHeight = 540;
 
+  const paintedRef = useRef<Set<string>>(new Set());
+
   const onClickCell = (x: number, y: number) => {
     const cell = state.map[y]?.[x];
     if (!cell) return;
+    if (tool?.kind === "road") {
+      const k = `${x},${y}`;
+      if (paintedRef.current.has(k)) return;
+      paintedRef.current.add(k);
+      if (cell.owned && cell.terrain === "plain") {
+        dispatch({ type: "TOGGLE_ROAD", x, y });
+      } else {
+        setFlash(k);
+        setTimeout(() => setFlash(null), 500);
+      }
+      return;
+    }
     if (!cell.owned) {
       if (tool?.kind === "buy") {
         dispatch({ type: "BUY_PARCEL", x, y });
@@ -124,8 +154,12 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     if (f) onSelect(f);
   };
 
-  // Pan
+  // Pan (disabled in road mode so the user can paint freely)
   const onPanStart = (e: React.PointerEvent) => {
+    if (tool?.kind === "road") {
+      paintedRef.current = new Set();
+      return;
+    }
     panDragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y, moved: false };
   };
   const onPanMove = (e: React.PointerEvent) => {
@@ -139,7 +173,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const onPanEnd = () => { panDragRef.current = null; };
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(2.5, z - e.deltaY * 0.001)));
+    setZoom((z) => Math.max(0.4, Math.min(3.5, z - e.deltaY * 0.001)));
   };
 
   const fincaByXY = useMemo(() => {
@@ -157,6 +191,8 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     state.infra.forEach((b) => m.set(`${b.x},${b.y}`, b));
     return m;
   }, [state.infra]);
+  const reach = useMemo(() => computeRoadNetwork(state.map), [state.map]);
+  const hasAnyRoad = reach.size > 1;
 
   return (
     <div className="space-y-3">
@@ -205,6 +241,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             const isSelected = !!(f && selectedId === f.id);
             const rot = f ? rotPct(f.stock, capacidad) : 0;
             const flashing = flash === `${x},${y}`;
+            const connected = (f || fa) ? (hasAnyRoad ? isConnected(x, y, reach) : true) : true;
 
             // Highlight valid targets for active tool
             let validTarget = false;
@@ -216,6 +253,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
               } else if (tool.kind === "infra") {
                 validTarget = !f && !fa && !inf;
                 invalidTarget = !validTarget;
+              } else if (tool.kind === "road") {
+                validTarget = !cell.road;
+                invalidTarget = false;
               }
             }
             if (tool?.kind === "buy" && !cell.owned) validTarget = true;
@@ -234,6 +274,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
                 flashing={flashing}
                 validTarget={validTarget}
                 invalidTarget={invalidTarget}
+                connected={connected}
                 onClick={() => onClickCell(x, y)}
               />
             );
@@ -299,7 +340,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
         </div>
 
         <div className="glass absolute right-2 top-2 flex flex-col gap-1 rounded-xl p-1 z-[800]">
-          <button onClick={() => setZoom((z) => Math.min(2.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
+          <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
             <ZoomIn size={14} />
           </button>
           <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
@@ -317,8 +358,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
           <div className="glass absolute left-1/2 top-2 -translate-x-1/2 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs z-[850]">
             <span className="font-bold text-[var(--amber)]">
               {tool.kind === "buy" ? "💰 Comprando parcela" :
+               tool.kind === "road" ? "🛣️ Trazando camino (arrastrá)" :
                tool.kind === "factory" ? `🏭 Colocando fábrica` :
-               `${INFRA_INFO[tool.type].icon} Colocando ${INFRA_INFO[tool.type].name}`}
+               tool.kind === "infra" ? `${INFRA_INFO[tool.type].icon} Colocando ${INFRA_INFO[tool.type].name}` : ""}
             </span>
             <button onClick={() => setTool(null)} className="rounded-md p-0.5 hover:bg-white/10"><X size={12} /></button>
           </div>
@@ -330,8 +372,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
 
 // ─── BuildToolbar ────────────────────────────────────────────────
 function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool) => void; pesos: number }) {
-  const items: Array<{ kind: "factory" | "infra" | "buy"; key: string; label: string; icon: string; cost: number; tone: string }> = [
+  const items: Array<{ kind: "factory" | "infra" | "buy" | "road"; key: string; label: string; icon: string; cost: number; tone: string }> = [
     { kind: "buy", key: "buy", label: "Comprar parcela", icon: "💰", cost: 0, tone: "amber" },
+    { kind: "road", key: "road", label: "Camino", icon: "🛣️", cost: 80_000, tone: "amber" },
     { kind: "infra", key: "vivienda1", label: "Campamento", icon: "⛺", cost: 800_000, tone: "vine" },
     { kind: "infra", key: "vivienda2", label: "Casas Finca", icon: "🏡", cost: 3_000_000, tone: "vine" },
     { kind: "infra", key: "vivienda3", label: "Barrio Pro", icon: "🏘️", cost: 10_000_000, tone: "vine" },
@@ -344,6 +387,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
   ];
   const isActive = (k: string) =>
     (tool?.kind === "buy" && k === "buy") ||
+    (tool?.kind === "road" && k === "road") ||
     (tool?.kind === "factory" && tool.type === k) ||
     (tool?.kind === "infra" && tool.type === k);
   return (
@@ -357,6 +401,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
             onClick={() => {
               if (isActive(it.key)) setTool(null);
               else if (it.kind === "buy") setTool({ kind: "buy" });
+              else if (it.kind === "road") setTool({ kind: "road" });
               else if (it.kind === "factory") setTool({ kind: "factory", type: it.key as FactoryType });
               else setTool({ kind: "infra", type: it.key as InfraType });
             }}
@@ -381,7 +426,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
 
 // ─── Cell ────────────────────────────────────────────────────────
 interface CellProps {
-  cell: { x: number; y: number; terrain: string; elevation: number; owned: boolean };
+  cell: { x: number; y: number; terrain: string; elevation: number; owned: boolean; road?: boolean };
   pos: { left: number; top: number };
   z: number;
   finca?: Finca;
@@ -392,11 +437,12 @@ interface CellProps {
   flashing: boolean;
   validTarget: boolean;
   invalidTarget: boolean;
+  connected: boolean;
   onClick: () => void;
 }
 
 const Cell = memo(function Cell({
-  cell, pos, z, finca: f, factory: fa, infra: inf, isSelected, rot, flashing, validTarget, invalidTarget, onClick,
+  cell, pos, z, finca: f, factory: fa, infra: inf, isSelected, rot, flashing, validTarget, invalidTarget, connected, onClick,
 }: CellProps) {
   const elevation = cell.terrain === "cerro" ? cell.elevation * 8 : 0;
 
@@ -492,6 +538,23 @@ const Cell = memo(function Cell({
       {renderTerrainBody()}
       {lockOverlay}
 
+      {/* Road overlay (paved isometric strip) */}
+      {cell.road && (
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: 8,
+            top: TILE_H * 0.5 + 1,
+            width: TILE_W - 16,
+            height: TILE_H - 4,
+            transform: "rotateX(60deg) rotateZ(45deg)",
+            background: "repeating-linear-gradient(90deg, oklch(0.45 0.01 60) 0 14px, oklch(0.55 0.02 70) 14px 18px)",
+            borderRadius: 3,
+            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.08), 0 1px 4px rgba(0,0,0,0.4)",
+          }}
+        />
+      )}
+
       {/* Terrain icons */}
       {cell.terrain === "cerro" && (
         <div className="pointer-events-none absolute" style={{ left: TILE_W * 0.32, top: TILE_H * 0.1 - elevation, fontSize: 24 }}>
@@ -534,10 +597,15 @@ const Cell = memo(function Cell({
 
       {/* Finca label */}
       {f && (
-        <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10">
+        <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10 flex flex-col items-center gap-0.5">
           <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive/80 text-white" : "bg-black/60 text-white"}`}>
             {f.name} · {f.stock}{rot > 0 ? " 💀" : ""}
           </span>
+          {!connected && (
+            <span className="rounded-full bg-destructive/85 px-1.5 py-[1px] text-[8px] font-bold text-white shadow animate-pulse">
+              ⚠ Sin camino
+            </span>
+          )}
         </div>
       )}
 
@@ -565,14 +633,30 @@ const Cell = memo(function Cell({
         )}
       </AnimatePresence>
 
-      {/* Infra: emoji + label */}
+      {/* Infra: HD sprite + label */}
       {inf && (
-        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 select-none" style={{ top: -TILE_H * 0.4 }}>
-          <div className="text-3xl drop-shadow-[0_6px_8px_rgba(0,0,0,0.6)]">{INFRA_INFO[inf.type].icon}</div>
-          <div className="absolute left-1/2 top-[110%] -translate-x-1/2 whitespace-nowrap rounded-md bg-black/65 px-1 py-[1px] text-[8px] font-bold text-white">
+        <>
+          <motion.img
+            initial={{ opacity: 0, scale: 0.5, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 220, damping: 18 }}
+            src={infraImg[inf.type]}
+            alt=""
+            draggable={false}
+            decoding="async"
+            className="pointer-events-none absolute select-none"
+            style={{
+              left: TILE_W * 0.05,
+              top: -TILE_H * 0.6,
+              width: TILE_W * 0.95,
+              height: TILE_W * 0.95,
+              filter: "drop-shadow(0 8px 10px rgba(0,0,0,0.6))",
+            }}
+          />
+          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-black/65 px-1 py-[1px] text-[8px] font-bold text-white" style={{ top: -TILE_H * 0.6 - 12 }}>
             {INFRA_INFO[inf.type].name}
           </div>
-        </div>
+        </>
       )}
 
       {/* Coverage radius hint when infra selected (only for water/comedor/salud) */}

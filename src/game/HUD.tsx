@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { useGame, fmtPesos, fmtUSD, monthName } from "./GameContext";
-import { Pause, Play, TrendingUp, TrendingDown, DollarSign, Coins, Flame, Users, Calendar, AlertTriangle, RotateCcw, Save } from "lucide-react";
+import { Pause, Play, TrendingUp, TrendingDown, DollarSign, Coins, Flame, Users, Calendar, AlertTriangle, RotateCcw, Save, FastForward, Gauge } from "lucide-react";
 
 export function HUD() {
   const { state, dispatch, resetGame } = useGame();
@@ -28,6 +28,24 @@ export function HUD() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Sim speed controls */}
+          <div className="glass flex items-center gap-0.5 rounded-xl p-1 text-[10px] font-bold">
+            <Gauge size={12} className="mx-1 text-muted-foreground" />
+            {([0, 1, 2, 4] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => dispatch({ type: "SET_SPEED", value: s })}
+                className={`flex h-7 min-w-[28px] items-center justify-center gap-0.5 rounded-lg px-1.5 transition ${
+                  state.simSpeed === s
+                    ? "bg-[var(--amber)]/20 text-[var(--amber)] ring-1 ring-[var(--amber)]"
+                    : "text-muted-foreground hover:bg-white/5"
+                }`}
+                title={s === 0 ? "Pausa" : `Velocidad ${s}×`}
+              >
+                {s === 0 ? <Pause size={11} /> : s === 4 ? <><FastForward size={10} />4×</> : `${s}×`}
+              </button>
+            ))}
+          </div>
           <motion.button
             whileTap={{ scale: 0.95 }}
             whileHover={{ scale: 1.03 }}
@@ -86,6 +104,12 @@ export function HUD() {
       {state.researching && (
         <div className="mt-3 rounded-xl border border-[var(--vine-green)]/30 bg-[var(--vine-green)]/10 px-3 py-2 text-xs text-[var(--vine-green)]">
           🧪 Investigando: <b>{state.researching.tech}</b> · faltan <b>{state.researching.mesesRestantes}</b> mes(es)
+        </div>
+      )}
+
+      {state.licitacionActiva && (
+        <div className="mt-3 rounded-xl border border-[var(--gold)]/40 bg-[var(--gold)]/10 px-3 py-2 text-xs text-[var(--gold)]">
+          📜 Licitación premium adjudicada: <b>US${state.licitacionActiva.bonusUSD.toLocaleString("es-AR")}</b> a cobrar el mes <b>{state.licitacionActiva.mesFin}</b>
         </div>
       )}
 
