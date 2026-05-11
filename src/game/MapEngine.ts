@@ -109,3 +109,33 @@ export function inRange(a: { x: number; y: number }, b: { x: number; y: number }
 export function isBuildable(cell: Cell) {
   return cell.owned && cell.terrain === "plain";
 }
+
+// BFS sobre celdas con road=true desde CENTER. Devuelve set "x,y" alcanzables.
+export function computeRoadNetwork(map: Cell[][]): Set<string> {
+  const reach = new Set<string>();
+  const startKey = `${CENTER.x},${CENTER.y}`;
+  reach.add(startKey);
+  const queue: Array<{ x: number; y: number }> = [{ x: CENTER.x, y: CENTER.y }];
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  while (queue.length) {
+    const { x, y } = queue.shift()!;
+    for (const [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) continue;
+      const k = `${nx},${ny}`;
+      if (reach.has(k)) continue;
+      const c = map[ny][nx];
+      if (!c.road) continue;
+      reach.add(k);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+  return reach;
+}
+
+// Edificio "conectado" si está sobre tile road alcanzable, o si una celda vecina lo está.
+export function isConnected(x: number, y: number, reach: Set<string>): boolean {
+  if (reach.has(`${x},${y}`)) return true;
+  return reach.has(`${x+1},${y}`) || reach.has(`${x-1},${y}`) || reach.has(`${x},${y+1}`) || reach.has(`${x},${y-1}`);
+}
