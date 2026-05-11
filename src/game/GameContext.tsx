@@ -286,9 +286,10 @@ function reducer(state: GameState, action: Action): GameState {
         let growth = Math.min(100, f.growth + (harvest ? 8 : 4));
         let stock = f.stock;
         const waterMult = pozos.length === 0 || fincaHasWater(f) ? 1 : 0.5; // sin pozos al inicio no penaliza
+        const roadMult = fincaConectada(f) ? 1 : 0.6;
         if (harvest && growth >= 80) {
           const baseRend = (f.type === "vid" || f.type === "olivo") ? yieldMult : 1;
-          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult);
+          const potencial = Math.floor(growth * 15 * (state.moralTrabajadores / 100) * baseRend * waterMult * roadMult);
           const restante = Math.max(0, capacidad - usadoCap);
           const cosechado = Math.min(potencial, restante);
           const perdido = potencial - cosechado;
