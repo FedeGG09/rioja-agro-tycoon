@@ -594,10 +594,15 @@ const Cell = memo(function Cell({
 
       {/* Finca label */}
       {f && (
-        <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10">
+        <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10 flex flex-col items-center gap-0.5">
           <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive/80 text-white" : "bg-black/60 text-white"}`}>
             {f.name} · {f.stock}{rot > 0 ? " 💀" : ""}
           </span>
+          {!connected && (
+            <span className="rounded-full bg-destructive/85 px-1.5 py-[1px] text-[8px] font-bold text-white shadow animate-pulse">
+              ⚠ Sin camino
+            </span>
+          )}
         </div>
       )}
 
