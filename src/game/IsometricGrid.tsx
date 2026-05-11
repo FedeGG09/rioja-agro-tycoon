@@ -333,8 +333,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
           <div className="glass absolute left-1/2 top-2 -translate-x-1/2 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs z-[850]">
             <span className="font-bold text-[var(--amber)]">
               {tool.kind === "buy" ? "💰 Comprando parcela" :
+               tool.kind === "road" ? "🛣️ Trazando camino (arrastrá)" :
                tool.kind === "factory" ? `🏭 Colocando fábrica` :
-               `${INFRA_INFO[tool.type].icon} Colocando ${INFRA_INFO[tool.type].name}`}
+               tool.kind === "infra" ? `${INFRA_INFO[tool.type].icon} Colocando ${INFRA_INFO[tool.type].name}` : ""}
             </span>
             <button onClick={() => setTool(null)} className="rounded-md p-0.5 hover:bg-white/10"><X size={12} /></button>
           </div>
