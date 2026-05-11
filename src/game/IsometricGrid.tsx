@@ -535,6 +535,23 @@ const Cell = memo(function Cell({
       {renderTerrainBody()}
       {lockOverlay}
 
+      {/* Road overlay (paved isometric strip) */}
+      {cell.road && (
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: 8,
+            top: TILE_H * 0.5 + 1,
+            width: TILE_W - 16,
+            height: TILE_H - 4,
+            transform: "rotateX(60deg) rotateZ(45deg)",
+            background: "repeating-linear-gradient(90deg, oklch(0.45 0.01 60) 0 14px, oklch(0.55 0.02 70) 14px 18px)",
+            borderRadius: 3,
+            boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.08), 0 1px 4px rgba(0,0,0,0.4)",
+          }}
+        />
+      )}
+
       {/* Terrain icons */}
       {cell.terrain === "cerro" && (
         <div className="pointer-events-none absolute" style={{ left: TILE_W * 0.32, top: TILE_H * 0.1 - elevation, fontSize: 24 }}>
