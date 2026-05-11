@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useGame, INFRA_INFO, type Finca, type FactoryType, type InfraType } from "./GameContext";
-import { parcelCost, isBuildable, computeRoadNetwork, isConnected, MAP_SIZE, CENTER } from "./MapEngine";
-import { ZoomIn, ZoomOut, Maximize2, Move, Lock, Mountain, Waves, X, Construction } from "lucide-react";
+import { parcelCost, computeRoadNetwork, isConnected, MAP_SIZE, CENTER } from "./MapEngine";
+import { ZoomIn, ZoomOut, Maximize2, Move, Lock, Mountain, Waves, X } from "lucide-react";
 import tileVid from "@/assets/tile-vid.png";
 import tileOlivo from "@/assets/tile-olivo.png";
 import tileNogal from "@/assets/tile-nogal.png";
