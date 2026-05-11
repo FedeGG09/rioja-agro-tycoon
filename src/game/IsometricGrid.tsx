@@ -274,6 +274,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
                 flashing={flashing}
                 validTarget={validTarget}
                 invalidTarget={invalidTarget}
+                connected={connected}
                 onClick={() => onClickCell(x, y)}
               />
             );
