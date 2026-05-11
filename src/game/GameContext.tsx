@@ -202,6 +202,8 @@ type Action =
   | { type: "BUY_PARCEL"; x: number; y: number }
   | { type: "PLACE_INFRA"; infraType: InfraType; x: number; y: number }
   | { type: "PLACE_FINCA_AT"; cropType: CropType; x: number; y: number }
+  | { type: "TOGGLE_ROAD"; x: number; y: number }
+  | { type: "SET_SPEED"; value: 0 | 1 | 2 | 4 }
   | { type: "LOAD_STATE"; state: GameState };
 
 const factoryFor: Record<CropType, FactoryType> = {
