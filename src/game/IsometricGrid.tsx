@@ -372,8 +372,9 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
 
 // ─── BuildToolbar ────────────────────────────────────────────────
 function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool) => void; pesos: number }) {
-  const items: Array<{ kind: "factory" | "infra" | "buy"; key: string; label: string; icon: string; cost: number; tone: string }> = [
+  const items: Array<{ kind: "factory" | "infra" | "buy" | "road"; key: string; label: string; icon: string; cost: number; tone: string }> = [
     { kind: "buy", key: "buy", label: "Comprar parcela", icon: "💰", cost: 0, tone: "amber" },
+    { kind: "road", key: "road", label: "Camino", icon: "🛣️", cost: 80_000, tone: "amber" },
     { kind: "infra", key: "vivienda1", label: "Campamento", icon: "⛺", cost: 800_000, tone: "vine" },
     { kind: "infra", key: "vivienda2", label: "Casas Finca", icon: "🏡", cost: 3_000_000, tone: "vine" },
     { kind: "infra", key: "vivienda3", label: "Barrio Pro", icon: "🏘️", cost: 10_000_000, tone: "vine" },
@@ -386,6 +387,7 @@ function BuildToolbar({ tool, setTool, pesos }: { tool: Tool; setTool: (t: Tool)
   ];
   const isActive = (k: string) =>
     (tool?.kind === "buy" && k === "buy") ||
+    (tool?.kind === "road" && k === "road") ||
     (tool?.kind === "factory" && tool.type === k) ||
     (tool?.kind === "infra" && tool.type === k);
   return (
