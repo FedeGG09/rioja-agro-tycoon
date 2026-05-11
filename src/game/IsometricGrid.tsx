@@ -97,9 +97,23 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const totalScale = fitScale * zoom;
   const boardHeight = 540;
 
+  const paintedRef = useRef<Set<string>>(new Set());
+
   const onClickCell = (x: number, y: number) => {
     const cell = state.map[y]?.[x];
     if (!cell) return;
+    if (tool?.kind === "road") {
+      const k = `${x},${y}`;
+      if (paintedRef.current.has(k)) return;
+      paintedRef.current.add(k);
+      if (cell.owned && cell.terrain === "plain") {
+        dispatch({ type: "TOGGLE_ROAD", x, y });
+      } else {
+        setFlash(k);
+        setTimeout(() => setFlash(null), 500);
+      }
+      return;
+    }
     if (!cell.owned) {
       if (tool?.kind === "buy") {
         dispatch({ type: "BUY_PARCEL", x, y });
@@ -140,8 +154,12 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
     if (f) onSelect(f);
   };
 
-  // Pan
+  // Pan (disabled in road mode so the user can paint freely)
   const onPanStart = (e: React.PointerEvent) => {
+    if (tool?.kind === "road") {
+      paintedRef.current = new Set();
+      return;
+    }
     panDragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y, moved: false };
   };
   const onPanMove = (e: React.PointerEvent) => {
