@@ -263,6 +263,10 @@ function reducer(state: GameState, action: Action): GameState {
       const fincaHasComedor = (f: Finca) => comedores.some((c) => inRange(c, f, INFRA_INFO.comedor.radius || 4));
       const fincaHasSalud = (f: Finca) => saluds.some((s) => inRange(s, f, INFRA_INFO.salud.radius || 5));
 
+      // Red vial: BFS desde el almacén (CENTER). Fincas conectadas reciben full rendimiento.
+      const reach = computeRoadNetwork(state.map);
+      const fincaConectada = (f: Finca) => reach.size === 1 ? true : isConnected(f.x, f.y, reach);
+
       // Proximidad vivienda → finca: si distancia mínima > 5 → desgaste -10
       let proximidadPenal = 0;
       let proximidadOk = 0;
