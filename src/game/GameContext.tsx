@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from "react";
 import { generatePool, generateWorker, type Worker } from "./workers";
-import { generateMap, parcelCost, manhattan, inRange, isBuildable, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
+import { generateMap, parcelCost, manhattan, inRange, isBuildable, computeRoadNetwork, isConnected, MAP_SIZE, CENTER, type Cell } from "./MapEngine";
 
 export type CropType = "vid" | "olivo" | "nogal";
 export type FactoryType = "bodega" | "almazara" | "nuez";
