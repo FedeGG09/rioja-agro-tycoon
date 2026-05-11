@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useGame, INFRA_INFO, type Finca, type FactoryType, type InfraType } from "./GameContext";
-import { parcelCost, isBuildable, MAP_SIZE, CENTER } from "./MapEngine";
-import { ZoomIn, ZoomOut, Maximize2, Move, Lock, Mountain, Waves, X } from "lucide-react";
+import { parcelCost, isBuildable, computeRoadNetwork, isConnected, MAP_SIZE, CENTER } from "./MapEngine";
+import { ZoomIn, ZoomOut, Maximize2, Move, Lock, Mountain, Waves, X, Construction } from "lucide-react";
 import tileVid from "@/assets/tile-vid.png";
 import tileOlivo from "@/assets/tile-olivo.png";
 import tileNogal from "@/assets/tile-nogal.png";
@@ -11,11 +11,26 @@ import buildBodega from "@/assets/build-bodega.png";
 import buildAlmazara from "@/assets/build-almazara.png";
 import buildNuez from "@/assets/build-nuez.png";
 import buildWarehouse from "@/assets/build-warehouse.png";
+import buildVivienda1 from "@/assets/build-vivienda1.png";
+import buildVivienda2 from "@/assets/build-vivienda2.png";
+import buildVivienda3 from "@/assets/build-vivienda3.png";
+import buildComedor from "@/assets/build-comedor.png";
+import buildSalud from "@/assets/build-salud.png";
+import buildPozo from "@/assets/build-pozo.png";
 
 const tileImg: Record<string, string> = { vid: tileVid, olivo: tileOlivo, nogal: tileNogal };
 const factoryImg: Record<FactoryType, string> = { bodega: buildBodega, almazara: buildAlmazara, nuez: buildNuez };
+const infraImg: Record<InfraType, string> = {
+  vivienda1: buildVivienda1,
+  vivienda2: buildVivienda2,
+  vivienda3: buildVivienda3,
+  comedor: buildComedor,
+  salud: buildSalud,
+  pozo: buildPozo,
+};
 
-const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez, buildWarehouse];
+const ALL_SPRITES = [tileVid, tileOlivo, tileNogal, tileEmpty, buildBodega, buildAlmazara, buildNuez, buildWarehouse,
+  buildVivienda1, buildVivienda2, buildVivienda3, buildComedor, buildSalud, buildPozo];
 if (typeof window !== "undefined") {
   ALL_SPRITES.forEach((src) => {
     const img = new Image();
