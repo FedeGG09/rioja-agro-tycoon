@@ -9,6 +9,7 @@ export interface Cell {
   terrain: Terrain;
   elevation: number; // 0..3 (cerros)
   owned: boolean;
+  road?: boolean;
 }
 
 export const MAP_SIZE = 20;
