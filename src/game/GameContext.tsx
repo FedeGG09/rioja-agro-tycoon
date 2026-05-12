@@ -153,10 +153,10 @@ const initial: GameState = {
   ultimoAumento: 0,
   mes: 1,
   fincas: [
-    { id: "f1", x: CENTER.x - 2, y: CENTER.y - 2, type: "vid", name: "Famatina", stock: 0, growth: 30 },
-    { id: "f2", x: CENTER.x + 1, y: CENTER.y - 2, type: "olivo", name: "Chilecito", stock: 0, growth: 50 },
-    { id: "f3", x: CENTER.x - 2, y: CENTER.y + 1, type: "nogal", name: "Valle del Bermejo", stock: 0, growth: 20 },
-    { id: "f4", x: CENTER.x + 1, y: CENTER.y + 1, type: "vid", name: "Nonogasta", stock: 0, growth: 45 },
+    { id: "f1", x: CENTER.x - 2, y: CENTER.y - 2, type: "vid", name: "Famatina", stock: 15000, growth: 100 },
+    { id: "f2", x: CENTER.x + 1, y: CENTER.y - 2, type: "olivo", name: "Chilecito", stock: 12000, growth: 100 },
+    { id: "f3", x: CENTER.x - 2, y: CENTER.y + 1, type: "nogal", name: "Valle del Bermejo", stock: 10000, growth: 100 },
+    { id: "f4", x: CENTER.x + 1, y: CENTER.y + 1, type: "vid", name: "Nonogasta", stock: 15000, growth: 100 },
   ],
   factories: [],
   eventos: [
