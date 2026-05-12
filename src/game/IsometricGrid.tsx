@@ -306,25 +306,27 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             </div>
           </div>
 
-          {/* Trabajadores hacia almacén durante cosecha */}
+          {/* Trabajadores golondrina yendo y volviendo entre finca y almacén */}
           <AnimatePresence>
-            {!state.huelga && harvest && totalWorkers > 0 && state.fincas.map((f, i) => {
-              const n = Math.max(1, Math.min(3, Math.round(totalWorkers / 8)));
+            {!state.huelga && state.trabajadoresGolondrina > 0 && state.fincas.map((f, i) => {
+              // 1 trabajador animado por cada 4 golondrinas, mínimo 1 si hay golondrinas
+              const perFinca = Math.max(1, Math.min(5, Math.ceil(state.trabajadoresGolondrina / 4 / Math.max(1, state.fincas.length))));
               const from = isoPos(f.x, f.y);
-              return Array.from({ length: n }).map((_, k) => (
+              const dur = harvest ? 4 : 7;
+              return Array.from({ length: perFinca }).map((_, k) => (
                 <motion.div
                   key={`w-${f.id}-${k}-${state.mes}`}
                   initial={{ opacity: 0, x: from.left, y: from.top }}
                   animate={{
-                    opacity: [0, 1, 1, 1, 0],
-                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
-                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
+                    opacity: [0, 1, 1, 1, 1, 1, 0],
+                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left, from.left, from.left],
+                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top - 14, WAREHOUSE.top, from.top, from.top],
                   }}
-                  transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{ duration: dur, delay: i * 0.4 + k * 0.5, repeat: Infinity, ease: "easeInOut" }}
                   className="pointer-events-none absolute left-0 top-0 text-base drop-shadow-lg"
                   style={{ zIndex: 600, willChange: "transform" }}
                 >
-                  👷
+                  {harvest ? "👷" : "🚶"}
                 </motion.div>
               ));
             })}
