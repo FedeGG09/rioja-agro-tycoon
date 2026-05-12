@@ -173,7 +173,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const onPanEnd = () => { panDragRef.current = null; };
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(3.5, z - e.deltaY * 0.001)));
+    setZoom((z) => Math.max(0.4, Math.min(5.0, z - e.deltaY * 0.001)));
   };
 
   const fincaByXY = useMemo(() => {
@@ -340,15 +340,16 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
         </div>
 
         <div className="glass absolute right-2 top-2 flex flex-col gap-1 rounded-xl p-1 z-[800]">
-          <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
+          <button onClick={() => setZoom((z) => Math.min(5.0, z + 0.3))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
             <ZoomIn size={14} />
           </button>
-          <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
+          <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.3))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
             <ZoomOut size={14} />
           </button>
           <button onClick={() => { setZoom(0.7); setPan({ x: 0, y: 0 }); }} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Reset">
             <Maximize2 size={14} />
           </button>
+          <div className="text-center text-[9px] font-bold tabular-nums text-[var(--amber)]">{zoom.toFixed(1)}x</div>
         </div>
         <div className="glass absolute left-2 top-2 flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground z-[800]">
           <Move size={11} /> Arrastrá · rueda para zoom
