@@ -173,7 +173,7 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
   const onPanEnd = () => { panDragRef.current = null; };
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(3.5, z - e.deltaY * 0.001)));
+    setZoom((z) => Math.max(0.4, Math.min(5.0, z - e.deltaY * 0.001)));
   };
 
   const fincaByXY = useMemo(() => {
@@ -306,25 +306,27 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             </div>
           </div>
 
-          {/* Trabajadores hacia almacén durante cosecha */}
+          {/* Trabajadores golondrina yendo y volviendo entre finca y almacén */}
           <AnimatePresence>
-            {!state.huelga && harvest && totalWorkers > 0 && state.fincas.map((f, i) => {
-              const n = Math.max(1, Math.min(3, Math.round(totalWorkers / 8)));
+            {!state.huelga && state.trabajadoresGolondrina > 0 && state.fincas.map((f, i) => {
+              // 1 trabajador animado por cada 4 golondrinas, mínimo 1 si hay golondrinas
+              const perFinca = Math.max(1, Math.min(5, Math.ceil(state.trabajadoresGolondrina / 4 / Math.max(1, state.fincas.length))));
               const from = isoPos(f.x, f.y);
-              return Array.from({ length: n }).map((_, k) => (
+              const dur = harvest ? 4 : 7;
+              return Array.from({ length: perFinca }).map((_, k) => (
                 <motion.div
                   key={`w-${f.id}-${k}-${state.mes}`}
                   initial={{ opacity: 0, x: from.left, y: from.top }}
                   animate={{
-                    opacity: [0, 1, 1, 1, 0],
-                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left],
-                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top, WAREHOUSE.top - 14],
+                    opacity: [0, 1, 1, 1, 1, 1, 0],
+                    x: [from.left, from.left, WAREHOUSE.left, WAREHOUSE.left, WAREHOUSE.left, from.left, from.left],
+                    y: [from.top, from.top, WAREHOUSE.top, WAREHOUSE.top - 14, WAREHOUSE.top, from.top, from.top],
                   }}
-                  transition={{ duration: 6, delay: i * 0.4 + k * 0.3, repeat: Infinity, ease: "easeInOut" }}
+                  transition={{ duration: dur, delay: i * 0.4 + k * 0.5, repeat: Infinity, ease: "easeInOut" }}
                   className="pointer-events-none absolute left-0 top-0 text-base drop-shadow-lg"
                   style={{ zIndex: 600, willChange: "transform" }}
                 >
-                  👷
+                  {harvest ? "👷" : "🚶"}
                 </motion.div>
               ));
             })}
@@ -340,15 +342,16 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
         </div>
 
         <div className="glass absolute right-2 top-2 flex flex-col gap-1 rounded-xl p-1 z-[800]">
-          <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
+          <button onClick={() => setZoom((z) => Math.min(5.0, z + 0.3))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom +">
             <ZoomIn size={14} />
           </button>
-          <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
+          <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.3))} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Zoom -">
             <ZoomOut size={14} />
           </button>
           <button onClick={() => { setZoom(0.7); setPan({ x: 0, y: 0 }); }} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10" title="Reset">
             <Maximize2 size={14} />
           </button>
+          <div className="text-center text-[9px] font-bold tabular-nums text-[var(--amber)]">{zoom.toFixed(1)}x</div>
         </div>
         <div className="glass absolute left-2 top-2 flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted-foreground z-[800]">
           <Move size={11} /> Arrastrá · rueda para zoom
@@ -451,22 +454,41 @@ const Cell = memo(function Cell({
     if (cell.terrain === "plain") {
       if (f) {
         return (
-          <img
-            src={tileImg[f.type]}
-            alt=""
-            width={TILE_W + 4}
-            height={TILE_W + 4}
-            decoding="async"
-            draggable={false}
-            className="pointer-events-none absolute -top-6 left-0 select-none"
-            style={{
-              width: TILE_W + 4,
-              height: TILE_W + 4,
-              filter: rot > 0
-                ? `hue-rotate(-30deg) saturate(${1 - rot * 0.6}) brightness(${1 - rot * 0.3}) sepia(${rot * 0.6})`
-                : isSelected ? "drop-shadow(0 0 12px var(--amber))" : "drop-shadow(0 6px 8px rgba(0,0,0,0.5))",
-            }}
-          />
+          <>
+            <img
+              src={tileImg[f.type]}
+              alt=""
+              width={TILE_W + 4}
+              height={TILE_W + 4}
+              decoding="async"
+              draggable={false}
+              className="pointer-events-none absolute -top-6 left-0 select-none"
+              style={{
+                width: TILE_W + 4,
+                height: TILE_W + 4,
+                filter: rot > 0
+                  ? `hue-rotate(-40deg) saturate(${1 - rot * 0.7}) brightness(${1 - rot * 0.45}) sepia(${rot * 0.85})`
+                  : isSelected ? "drop-shadow(0 0 12px var(--amber))" : "drop-shadow(0 6px 8px rgba(0,0,0,0.5))",
+              }}
+            />
+            {rot > 0 && (
+              <motion.div
+                animate={{ opacity: [0.35, 0.7, 0.35] }}
+                transition={{ duration: 1.6, repeat: Infinity }}
+                className="pointer-events-none absolute"
+                style={{
+                  left: 2,
+                  top: TILE_H * 0.5,
+                  width: TILE_W - 4,
+                  height: TILE_H,
+                  transform: "rotateX(60deg) rotateZ(45deg)",
+                  background: `radial-gradient(ellipse at center, oklch(0.45 0.22 25 / ${0.55 * rot}), oklch(0.3 0.18 30 / ${0.4 * rot}) 60%, transparent 90%)`,
+                  borderRadius: 6,
+                  boxShadow: `0 0 18px oklch(0.55 0.22 25 / ${0.7 * rot})`,
+                }}
+              />
+            )}
+          </>
         );
       }
       // Empty owned plain
@@ -598,9 +620,19 @@ const Cell = memo(function Cell({
       {/* Finca label */}
       {f && (
         <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10 flex flex-col items-center gap-0.5">
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive/80 text-white" : "bg-black/60 text-white"}`}>
+          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive text-white" : "bg-black/60 text-white"}`}>
             {f.name} · {f.stock}{rot > 0 ? " 💀" : ""}
           </span>
+          {rot > 0 && (
+            <motion.span
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              className="rounded-full bg-destructive px-1.5 py-[1px] text-[8px] font-black text-white shadow-lg"
+              style={{ boxShadow: "0 0 12px oklch(0.62 0.24 25 / 0.8)" }}
+            >
+              🪰 Pudriéndose {Math.round(rot * 100)}%
+            </motion.span>
+          )}
           {!connected && (
             <span className="rounded-full bg-destructive/85 px-1.5 py-[1px] text-[8px] font-bold text-white shadow animate-pulse">
               ⚠ Sin camino
