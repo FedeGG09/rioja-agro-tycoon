@@ -306,11 +306,11 @@ export function IsometricGrid({ onSelect, selectedId }: { onSelect: (f: Finca) =
             </div>
           </div>
 
-          {/* Trabajadores golondrina yendo y volviendo entre finca y almacén */}
+          {/* Trabajadores yendo y volviendo entre finca y almacén */}
           <AnimatePresence>
-            {!state.huelga && state.trabajadoresGolondrina > 0 && state.fincas.map((f, i) => {
-              // 1 trabajador animado por cada 4 golondrinas, mínimo 1 si hay golondrinas
-              const perFinca = Math.max(1, Math.min(5, Math.ceil(state.trabajadoresGolondrina / 4 / Math.max(1, state.fincas.length))));
+            {!state.huelga && totalWorkers > 0 && state.fincas.map((f, i) => {
+              // 1 trabajador animado por cada 4 trabajadores, mínimo 1
+              const perFinca = Math.max(1, Math.min(5, Math.ceil(totalWorkers / 4 / Math.max(1, state.fincas.length))));
               const from = isoPos(f.x, f.y);
               const dur = harvest ? 4 : 7;
               return Array.from({ length: perFinca }).map((_, k) => (
