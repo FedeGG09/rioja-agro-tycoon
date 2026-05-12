@@ -620,9 +620,19 @@ const Cell = memo(function Cell({
       {/* Finca label */}
       {f && (
         <div className="pointer-events-none absolute left-1/2 -top-1 -translate-x-1/2 z-10 flex flex-col items-center gap-0.5">
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive/80 text-white" : "bg-black/60 text-white"}`}>
+          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${rot > 0 ? "bg-destructive text-white" : "bg-black/60 text-white"}`}>
             {f.name} · {f.stock}{rot > 0 ? " 💀" : ""}
           </span>
+          {rot > 0 && (
+            <motion.span
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 1.2, repeat: Infinity }}
+              className="rounded-full bg-destructive px-1.5 py-[1px] text-[8px] font-black text-white shadow-lg"
+              style={{ boxShadow: "0 0 12px oklch(0.62 0.24 25 / 0.8)" }}
+            >
+              🪰 Pudriéndose {Math.round(rot * 100)}%
+            </motion.span>
+          )}
           {!connected && (
             <span className="rounded-full bg-destructive/85 px-1.5 py-[1px] text-[8px] font-bold text-white shadow animate-pulse">
               ⚠ Sin camino
