@@ -137,10 +137,10 @@ const initialPermanentes: Worker[] = [
 ];
 
 const initial: GameState = {
-  pesos: 2_500_000,
+  pesos: 8_000_000,
   dolares: 0,
   deuda: 0,
-  inflacionMensual: 6,
+  inflacionMensual: 3,
   inflacionAcumulada: 0,
   tipoDeCambio: 1000,
   brecha: 40,
@@ -166,7 +166,7 @@ const initial: GameState = {
   paused: false,
   huelga: false,
   pendingExports: [],
-  costoInsumosMensual: 120_000,
+  costoInsumosMensual: 55_000,
   personalDisponible: generatePool(6, 350_000),
   personalContratado: initialPermanentes,
   tech: { riego: false, mecanizacion: false, drones: false },
@@ -313,7 +313,7 @@ function reducer(state: GameState, action: Action): GameState {
       const salariosImpagos = costoSalarios > state.pesos;
       let pesos = state.pesos - costoSalarios - costoInsumos;
 
-      const inflacionMensual = Math.max(2, state.inflacionMensual + rand(-0.6, 0.8) * inflacionMitigada);
+      const inflacionMensual = Math.max(1.5, Math.min(8, state.inflacionMensual + rand(-0.5, 0.4) * inflacionMitigada));
       const inflacionAcumulada = state.inflacionAcumulada + state.inflacionMensual;
 
       const tipoDeCambio = Math.round(state.tipoDeCambio * (1 + state.inflacionMensual / 100 - 0.005));
@@ -329,7 +329,7 @@ function reducer(state: GameState, action: Action): GameState {
       const huelga = moralTrabajadores <= 20;
 
       const eventos = [...state.eventos];
-      if (Math.random() < 0.18) {
+      if (Math.random() < 0.09) {
         const roll = Math.random();
         if (roll < 0.33) {
           eventos.unshift({ id: `ev${mes}a`, title: "Viento Zonda", description: "Ráfagas calientes desbordan los viñedos. La moral cae.", kind: "bad", month: mes });
@@ -401,7 +401,7 @@ function reducer(state: GameState, action: Action): GameState {
         deuda += Math.abs(pesos);
         pesos = 0;
       }
-      deuda = Math.round(deuda * 1.08);
+      deuda = Math.round(deuda * 1.03);
 
       // Refresh pool de RRHH cada 3 meses
       let personalDisponible = state.personalDisponible;
