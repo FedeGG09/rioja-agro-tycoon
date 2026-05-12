@@ -454,22 +454,41 @@ const Cell = memo(function Cell({
     if (cell.terrain === "plain") {
       if (f) {
         return (
-          <img
-            src={tileImg[f.type]}
-            alt=""
-            width={TILE_W + 4}
-            height={TILE_W + 4}
-            decoding="async"
-            draggable={false}
-            className="pointer-events-none absolute -top-6 left-0 select-none"
-            style={{
-              width: TILE_W + 4,
-              height: TILE_W + 4,
-              filter: rot > 0
-                ? `hue-rotate(-30deg) saturate(${1 - rot * 0.6}) brightness(${1 - rot * 0.3}) sepia(${rot * 0.6})`
-                : isSelected ? "drop-shadow(0 0 12px var(--amber))" : "drop-shadow(0 6px 8px rgba(0,0,0,0.5))",
-            }}
-          />
+          <>
+            <img
+              src={tileImg[f.type]}
+              alt=""
+              width={TILE_W + 4}
+              height={TILE_W + 4}
+              decoding="async"
+              draggable={false}
+              className="pointer-events-none absolute -top-6 left-0 select-none"
+              style={{
+                width: TILE_W + 4,
+                height: TILE_W + 4,
+                filter: rot > 0
+                  ? `hue-rotate(-40deg) saturate(${1 - rot * 0.7}) brightness(${1 - rot * 0.45}) sepia(${rot * 0.85})`
+                  : isSelected ? "drop-shadow(0 0 12px var(--amber))" : "drop-shadow(0 6px 8px rgba(0,0,0,0.5))",
+              }}
+            />
+            {rot > 0 && (
+              <motion.div
+                animate={{ opacity: [0.35, 0.7, 0.35] }}
+                transition={{ duration: 1.6, repeat: Infinity }}
+                className="pointer-events-none absolute"
+                style={{
+                  left: 2,
+                  top: TILE_H * 0.5,
+                  width: TILE_W - 4,
+                  height: TILE_H,
+                  transform: "rotateX(60deg) rotateZ(45deg)",
+                  background: `radial-gradient(ellipse at center, oklch(0.45 0.22 25 / ${0.55 * rot}), oklch(0.3 0.18 30 / ${0.4 * rot}) 60%, transparent 90%)`,
+                  borderRadius: 6,
+                  boxShadow: `0 0 18px oklch(0.55 0.22 25 / ${0.7 * rot})`,
+                }}
+              />
+            )}
+          </>
         );
       }
       // Empty owned plain
